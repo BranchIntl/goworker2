@@ -5,7 +5,7 @@ import (
 
 	"github.com/benmanns/goworker/pkg/brokers/redis"
 	"github.com/benmanns/goworker/pkg/interfaces"
-	"github.com/benmanns/goworker/pkg/serializers/json"
+	json "github.com/benmanns/goworker/pkg/serializers/resque"
 )
 
 // BrokerType represents the type of broker
