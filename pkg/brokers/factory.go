@@ -6,8 +6,8 @@ import (
 	"github.com/benmanns/goworker/pkg/brokers/rabbitmq"
 	"github.com/benmanns/goworker/pkg/brokers/redis"
 	"github.com/benmanns/goworker/pkg/interfaces"
-	"github.com/benmanns/goworker/pkg/serializers/json"
 	"github.com/benmanns/goworker/pkg/serializers/sneakers"
+	"github.com/benmanns/goworker/pkg/serializers/resque"
 )
 
 // BrokerType represents the type of broker
@@ -41,7 +41,7 @@ func NewBroker(config Config) (interfaces.Broker, error) {
 	if config.Serializer == nil {
 		switch config.Type {
 		case Redis:
-			config.Serializer = json.NewSerializer()
+			config.Serializer = resque.NewSerializer()
 		case RabbitMQ:
 			config.Serializer = sneakers.NewSerializer()
 		default:
