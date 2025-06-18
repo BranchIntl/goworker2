@@ -5,7 +5,7 @@ import (
 
 	"github.com/benmanns/goworker/pkg/brokers/redis"
 	"github.com/benmanns/goworker/pkg/interfaces"
-	json "github.com/benmanns/goworker/pkg/serializers/resque"
+	"github.com/benmanns/goworker/pkg/serializers/resque"
 )
 
 // BrokerType represents the type of broker
@@ -37,7 +37,7 @@ type Config struct {
 func NewBroker(config Config) (interfaces.Broker, error) {
 	// Default serializer if not provided
 	if config.Serializer == nil {
-		config.Serializer = json.NewSerializer()
+		config.Serializer = resque.NewSerializer()
 	}
 
 	switch config.Type {

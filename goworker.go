@@ -14,7 +14,7 @@ import (
 	"github.com/benmanns/goworker/pkg/core"
 	"github.com/benmanns/goworker/pkg/interfaces"
 	"github.com/benmanns/goworker/pkg/registry"
-	json_serializer "github.com/benmanns/goworker/pkg/serializers/resque"
+	"github.com/benmanns/goworker/pkg/serializers/resque"
 	redisstats "github.com/benmanns/goworker/pkg/statistics/redis"
 	"github.com/cihub/seelog"
 	"github.com/gomodule/redigo/redis"
@@ -153,7 +153,7 @@ func Init() error {
 			TLSCertPath:    workerSettings.TLSCertPath,
 		}
 
-		serializer := json_serializer.NewSerializer()
+		serializer := resque.NewSerializer()
 		serializer.SetUseNumber(workerSettings.UseNumber)
 
 		broker := redisbroker.NewBroker(brokerOpts, serializer)
@@ -261,7 +261,7 @@ func Enqueue(job *Job) error {
 	}
 
 	// Convert old Job type to new interface
-	newJob := json_serializer.NewJob(job.Queue, job.Payload.Class, job.Payload.Args)
+	newJob := resque.NewJob(job.Queue, job.Payload.Class, job.Payload.Args)
 
 	return engine.Enqueue(newJob)
 }

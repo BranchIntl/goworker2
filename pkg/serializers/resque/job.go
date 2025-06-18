@@ -2,18 +2,19 @@ package resque
 
 import (
 	"fmt"
-	"time"
 	"math/rand"
+	"time"
+
 	"github.com/benmanns/goworker/pkg/interfaces"
 )
 
-// Job represents a deserialized JSON job
+// Job represents a deserialized resque job
 type Job struct {
 	metadata interfaces.JobMetadata
 	payload  interfaces.Payload
 }
 
-// NewJob creates a new RMQ job
+// NewJob creates a new resque job
 func NewJob(queue string, class string, args []interface{}) *Job {
 	return &Job{
 		metadata: interfaces.JobMetadata{
@@ -28,7 +29,7 @@ func NewJob(queue string, class string, args []interface{}) *Job {
 	}
 }
 
-// NewJobWithMetadata creates a new RMQ job with custom metadata
+// NewJobWithMetadata creates a new resque job with custom metadata
 func NewJobWithMetadata(metadata interfaces.JobMetadata, payload interfaces.Payload) *Job {
 	return &Job{
 		metadata: metadata,
@@ -88,6 +89,6 @@ func (j *Job) GetPayload() interfaces.Payload {
 
 // generateJobID generates a unique job ID
 func generateJobID() string {
-        // Simple implementation - in production might use UUID
-        return fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
+	// Simple implementation - in production might use UUID
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int63())
 }
