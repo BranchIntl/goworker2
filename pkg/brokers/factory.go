@@ -44,8 +44,6 @@ func NewBroker(config Config) (interfaces.Broker, error) {
 			config.Serializer = resque.NewSerializer()
 		case RabbitMQ:
 			config.Serializer = sneakers.NewSerializer()
-		default:
-			config.Serializer = json.NewSerializer()
 		}
 	}
 
