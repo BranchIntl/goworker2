@@ -87,6 +87,10 @@ func (j *Job) GetPayload() interfaces.Payload {
 	return j.payload
 }
 
+func (j *Job) GetMetadata() interfaces.JobMetadata {
+	return j.metadata
+}
+
 // generateJobID generates a unique job ID
 func generateJobID() string {
 	// Simple implementation - in production might use UUID
