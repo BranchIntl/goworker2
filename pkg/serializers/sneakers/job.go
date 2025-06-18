@@ -2,9 +2,10 @@ package sneakers
 
 import (
 	"encoding/json"
+	"time"
+
 	"github.com/benmanns/goworker/pkg/interfaces"
 	"github.com/google/uuid"
-	"time"
 )
 
 type Job struct {
@@ -26,10 +27,17 @@ type Message struct {
 	EnqueuedAt          string                 `json:"enqueued_at"`
 }
 
-func NewJob(metadata interfaces.JobMetadata, payload interfaces.Payload) Job {
-	return Job{
-		metadata: metadata,
-		payload:  payload,
+func NewJob(queue string, class string, args []interface{}) *Job {
+	return &Job{
+		metadata: interfaces.JobMetadata{
+			ID:         uuid.NewString(),
+			Queue:      queue,
+			EnqueuedAt: time.Now(),
+		},
+		payload: interfaces.Payload{
+			Class: class,
+			Args:  args,
+		},
 	}
 }
 
@@ -76,7 +84,6 @@ func (j *Job) GetPayload() interfaces.Payload {
 func (j *Job) GetMetadata() interfaces.JobMetadata {
 	return j.metadata
 }
-
 
 func ConstructMessage(j interfaces.Job) Message {
 	payload := j.GetPayload()
