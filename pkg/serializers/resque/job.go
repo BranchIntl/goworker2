@@ -1,4 +1,4 @@
-package redis
+package resque
 
 import (
 	"fmt"
@@ -8,13 +8,13 @@ import (
 	"github.com/benmanns/goworker/pkg/interfaces"
 )
 
-// Job represents a Redis job
+// Job represents a deserialized resque job
 type Job struct {
 	metadata interfaces.JobMetadata
 	payload  interfaces.Payload
 }
 
-// NewJob creates a new Redis job
+// NewJob creates a new resque job
 func NewJob(queue string, class string, args []interface{}) *Job {
 	return &Job{
 		metadata: interfaces.JobMetadata{
@@ -26,6 +26,14 @@ func NewJob(queue string, class string, args []interface{}) *Job {
 			Class: class,
 			Args:  args,
 		},
+	}
+}
+
+// NewJobWithMetadata creates a new resque job with custom metadata
+func NewJobWithMetadata(metadata interfaces.JobMetadata, payload interfaces.Payload) *Job {
+	return &Job{
+		metadata: metadata,
+		payload:  payload,
 	}
 }
 
