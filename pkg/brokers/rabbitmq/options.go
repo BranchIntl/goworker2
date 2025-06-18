@@ -13,7 +13,7 @@ func DefaultOptions() Options {
 	return Options{
 		URI:           "amqp://guest:guest@localhost:5672/",
 		PrefetchCount: 1,
-		Exchange:      "",
+		Exchange:      "activejob",
 		ExchangeType:  "direct",
 	}
 }

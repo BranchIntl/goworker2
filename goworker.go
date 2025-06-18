@@ -10,14 +10,16 @@ import (
 	"sync"
 	"time"
 
+	rmqbroker "github.com/benmanns/goworker/pkg/brokers/rabbitmq"
 	redisbroker "github.com/benmanns/goworker/pkg/brokers/redis"
 	"github.com/benmanns/goworker/pkg/core"
 	"github.com/benmanns/goworker/pkg/interfaces"
 	"github.com/benmanns/goworker/pkg/registry"
 	"github.com/benmanns/goworker/pkg/serializers/resque"
+	"github.com/benmanns/goworker/pkg/serializers/sneakers"
+	rmqstats "github.com/benmanns/goworker/pkg/statistics/rabbitmq"
 	redisstats "github.com/benmanns/goworker/pkg/statistics/redis"
 	"github.com/cihub/seelog"
-	"github.com/gomodule/redigo/redis"
 )
 
 var (
@@ -28,21 +30,39 @@ var (
 	initialized    bool
 )
 
-// WorkerSettings holds the configuration (backward compatibility)
+// BrokerType represents the type of broker to use
+type BrokerType string
+
+const (
+	BrokerTypeRedis    BrokerType = "redis"
+	BrokerTypeRabbitMQ BrokerType = "rabbitmq"
+)
+
+// WorkerSettings holds the configuration
 type WorkerSettings struct {
+	// Common settings
+	BrokerType     BrokerType
 	QueuesString   string
 	Queues         queuesFlag
 	IntervalFloat  float64
 	Interval       intervalFlag
 	Concurrency    int
 	Connections    int
-	URI            string
-	Namespace      string
 	ExitOnComplete bool
 	IsStrict       bool
 	UseNumber      bool
+
+	// Redis-specific settings
+	RedisURI       string
+	RedisNamespace string
 	SkipTLSVerify  bool
 	TLSCertPath    string
+
+	// RabbitMQ-specific settings
+	RabbitMQURI string
+	Exchange     string
+	ExchangeType string
+	PrefetchCount int
 }
 
 var workerSettings WorkerSettings
@@ -92,13 +112,18 @@ func (i *intervalFlag) String() string {
 	return fmt.Sprint(*i)
 }
 
-// Initialize flags (backward compatibility)
+// Initialize flags
 func init() {
-	flag.StringVar(&workerSettings.QueuesString, "queues", "", "a comma-separated list of Resque queues")
+	// Common flags
+	flag.StringVar((*string)(&workerSettings.BrokerType), "broker", "redis", "broker type: redis or rabbitmq")
+	flag.StringVar(&workerSettings.QueuesString, "queues", "", "a comma-separated list of queues")
 	flag.Float64Var(&workerSettings.IntervalFloat, "interval", 5.0, "sleep interval when no jobs are found")
 	flag.IntVar(&workerSettings.Concurrency, "concurrency", 25, "the maximum number of concurrently executing jobs")
-	flag.IntVar(&workerSettings.Connections, "connections", 2, "the maximum number of connections to the Redis database")
+	flag.IntVar(&workerSettings.Connections, "connections", 2, "the maximum number of connections to the broker")
+	flag.BoolVar(&workerSettings.ExitOnComplete, "exit-on-complete", false, "exit when the queue is empty")
+	flag.BoolVar(&workerSettings.UseNumber, "use-number", false, "use json.Number instead of float64 when decoding numbers in JSON")
 
+	// Redis-specific flags
 	redisProvider := os.Getenv("REDIS_PROVIDER")
 	var redisEnvURI string
 	if redisProvider != "" {
@@ -109,15 +134,24 @@ func init() {
 	if redisEnvURI == "" {
 		redisEnvURI = "redis://localhost:6379/"
 	}
-	flag.StringVar(&workerSettings.URI, "uri", redisEnvURI, "the URI of the Redis server")
-
-	flag.StringVar(&workerSettings.Namespace, "namespace", "resque:", "the Redis namespace")
+	flag.StringVar(&workerSettings.RedisURI, "redis-uri", redisEnvURI, "the URI of the Redis server")
+	flag.StringVar(&workerSettings.RedisNamespace, "redis-namespace", "resque:", "the Redis namespace")
 	flag.StringVar(&workerSettings.TLSCertPath, "tls-cert", "", "path to a custom CA cert")
-	flag.BoolVar(&workerSettings.ExitOnComplete, "exit-on-complete", false, "exit when the queue is empty")
-	flag.BoolVar(&workerSettings.UseNumber, "use-number", false, "use json.Number instead of float64 when decoding numbers in JSON. will default to true soon")
 	flag.BoolVar(&workerSettings.SkipTLSVerify, "insecure-tls", false, "skip TLS validation")
 
+	// RabbitMQ-specific flags
+	rmqEnvURI := os.Getenv("RABBITMQ_URL")
+	if rmqEnvURI == "" {
+		rmqEnvURI = "amqp://guest:guest@localhost:5672/"
+	}
+	flag.StringVar(&workerSettings.RabbitMQURI, "rabbitmq-uri", rmqEnvURI, "the URI of the RabbitMQ server")
+	flag.StringVar(&workerSettings.Exchange, "exchange", "goworker", "the RabbitMQ exchange name")
+	flag.StringVar(&workerSettings.ExchangeType, "exchange-type", "direct", "the RabbitMQ exchange type")
+
 	globalRegistry = registry.NewRegistry()
+
+	// Set default broker type
+	workerSettings.BrokerType = BrokerTypeRabbitMQ
 }
 
 // Init initializes the goworker process
@@ -136,28 +170,27 @@ func Init() error {
 			return err
 		}
 
-		// Create components
-		brokerOpts := redisbroker.Options{
-			URI:            workerSettings.URI,
-			Namespace:      workerSettings.Namespace,
-			MaxConnections: workerSettings.Connections,
-			UseTLS:         workerSettings.SkipTLSVerify,
-			TLSCertPath:    workerSettings.TLSCertPath,
+		// Create broker and stats based on type
+		var broker interfaces.Broker
+		var stats interfaces.Statistics
+		var serializer interfaces.Serializer
+
+		switch workerSettings.BrokerType {
+		case BrokerTypeRedis:
+			serializer := resque.NewSerializer()
+			serializer.SetUseNumber(workerSettings.UseNumber)
+			broker, stats, err = createRedisBrokerAndStats(serializer)
+		case BrokerTypeRabbitMQ:
+			serializer := sneakers.NewSerializer()
+			serializer.SetUseNumber(workerSettings.UseNumber)
+			broker, stats, err = createRabbitMQBrokerAndStats(serializer)
+		default:
+			return fmt.Errorf("unsupported broker type: %s", workerSettings.BrokerType)
 		}
 
-		statsOpts := redisstats.Options{
-			URI:            workerSettings.URI,
-			Namespace:      workerSettings.Namespace,
-			MaxConnections: workerSettings.Connections,
-			UseTLS:         workerSettings.SkipTLSVerify,
-			TLSCertPath:    workerSettings.TLSCertPath,
+		if err != nil {
+			return fmt.Errorf("failed to create broker: %w", err)
 		}
-
-		serializer := resque.NewSerializer()
-		serializer.SetUseNumber(workerSettings.UseNumber)
-
-		broker := redisbroker.NewBroker(brokerOpts, serializer)
-		stats := redisstats.NewStatistics(statsOpts)
 
 		// Create engine
 		engine = core.NewEngine(
@@ -175,6 +208,47 @@ func Init() error {
 		initialized = true
 	}
 	return nil
+}
+
+// createRedisBrokerAndStats creates Redis broker and statistics
+func createRedisBrokerAndStats(serializer interfaces.Serializer) (interfaces.Broker, interfaces.Statistics, error) {
+	brokerOpts := redisbroker.Options{
+		URI:            workerSettings.RedisURI,
+		Namespace:      workerSettings.RedisNamespace,
+		MaxConnections: workerSettings.Connections,
+		UseTLS:         workerSettings.SkipTLSVerify,
+		TLSCertPath:    workerSettings.TLSCertPath,
+	}
+
+	statsOpts := redisstats.Options{
+		URI:            workerSettings.RedisURI,
+		Namespace:      workerSettings.RedisNamespace,
+		MaxConnections: workerSettings.Connections,
+		UseTLS:         workerSettings.SkipTLSVerify,
+		TLSCertPath:    workerSettings.TLSCertPath,
+	}
+
+	broker := redisbroker.NewBroker(brokerOpts, serializer)
+	stats := redisstats.NewStatistics(statsOpts)
+
+	return broker, stats, nil
+}
+
+// createRabbitMQBrokerAndStats creates RabbitMQ broker and statistics
+func createRabbitMQBrokerAndStats(serializer interfaces.Serializer) (interfaces.Broker, interfaces.Statistics, error) {
+	brokerOpts := rmqbroker.Options{
+		URI: workerSettings.RabbitMQURI,
+		PrefetchCount: workerSettings.PrefetchCount,
+		Exchange:      workerSettings.Exchange,
+		ExchangeType:  workerSettings.ExchangeType,
+	}
+
+	statsOpts := rmqstats.DefaultOptions()
+
+	broker := rmqbroker.NewBroker(brokerOpts, serializer)
+	stats := rmqstats.NewStatistics(statsOpts)
+
+	return broker, stats, nil
 }
 
 // Work starts the goworker process
@@ -218,10 +292,7 @@ func Close() {
 	}
 }
 
-// Register registers a goworker worker function. Class
-// refers to the Ruby name of the class which enqueues the
-// job. Worker is a function which accepts a queue and an
-// arbitrary array of interfaces as arguments.
+// Register registers a goworker worker function
 func Register(class string, worker interfaces.WorkerFunc) {
 	globalRegistry.Register(class, worker)
 }
@@ -233,7 +304,7 @@ func SetSettings(settings WorkerSettings) {
 
 // Backward compatibility types
 
-// Job represents a job to be processed (backward compatibility)
+// Job represents a job to be processed (backward compatibility~)
 type Job struct {
 	Queue   string
 	Payload Payload
@@ -245,41 +316,33 @@ type Payload struct {
 	Args  []interface{} `json:"args"`
 }
 
-// RedisConn wraps a Redis connection (backward compatibility)
-type RedisConn struct {
-	redis.Conn
-}
-
-func (r *RedisConn) Close() {
-	_ = r.Conn.Close()
-}
-
 // Enqueue adds a job to the queue
 func Enqueue(job *Job) error {
 	if err := Init(); err != nil {
 		return err
 	}
 
-	// Convert old Job type to new interface
-	newJob := resque.NewJob(job.Queue, job.Payload.Class, job.Payload.Args)
+	// Create job using the broker's job creation method
+	var newJob interfaces.Job
+
+	switch workerSettings.BrokerType {
+	case BrokerTypeRedis:
+		newJob = resque.NewJob(job.Queue, job.Payload.Class, job.Payload.Args)
+	case BrokerTypeRabbitMQ:
+		newJob = sneakers.NewJob(job.Queue, job.Payload.Class, job.Payload.Args)
+	default:
+		return fmt.Errorf("unsupported broker type: %s", workerSettings.BrokerType)
+	}
 
 	return engine.Enqueue(newJob)
 }
 
-// GetConn returns a Redis connection (backward compatibility)
-func GetConn() (*RedisConn, error) {
-	// This is a compatibility shim - the new architecture doesn't expose connections
-	return nil, fmt.Errorf("GetConn is deprecated in the new architecture")
-}
-
-// PutConn returns a connection to the pool (backward compatibility)
-func PutConn(conn *RedisConn) {
-	// No-op for compatibility
-}
-
-// Namespace returns the namespace
+// Namespace returns the namespace (Redis-specific, returns empty for RabbitMQ)
 func Namespace() string {
-	return workerSettings.Namespace
+	if workerSettings.BrokerType == BrokerTypeRedis {
+		return workerSettings.RedisNamespace
+	}
+	return ""
 }
 
 // Helper functions
@@ -296,10 +359,18 @@ func flags() error {
 	}
 	workerSettings.IsStrict = strings.IndexRune(workerSettings.QueuesString, '=') == -1
 
-	if !workerSettings.UseNumber {
+	// Validate broker type
+	switch workerSettings.BrokerType {
+	case BrokerTypeRedis, BrokerTypeRabbitMQ:
+		// Valid
+	default:
+		return fmt.Errorf("invalid broker type: %s. Must be 'redis' or 'rabbitmq'", workerSettings.BrokerType)
+	}
+
+	if !workerSettings.UseNumber && workerSettings.BrokerType == BrokerTypeRedis {
 		logger.Warn("== DEPRECATION WARNING ==")
 		logger.Warn("  Currently, encoding/json decodes numbers as float64.")
-		logger.Warn("  This can cause numbers to lose precision as they are read from the Resque queue.")
+		logger.Warn("  This can cause numbers to lose precision as they are read from the queue.")
 		logger.Warn("  Set the -use-number flag to use json.Number when decoding numbers and remove this warning.")
 	}
 

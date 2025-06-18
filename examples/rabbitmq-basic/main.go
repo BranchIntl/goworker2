@@ -14,18 +14,21 @@ func myFunc(queue string, args ...interface{}) error {
 
 func init() {
 	settings := goworker.WorkerSettings{
-		BrokerType:     "redis",
-		RedisURI:       "redis://localhost:6379/",
+		BrokerType:     "rabbitmq",
+		RabbitMQURI:    "amqp://guest:guest@localhost:5672/",
 		Connections:    100,
-		Queues:         []string{"myqueue"},
+		Queues:         []string{"goworker_queue"},
+		QueuesString:   "goworker_queue",
 		UseNumber:      true,
 		ExitOnComplete: false,
 		Concurrency:    2,
-		RedisNamespace: "resque:",
-		IntervalFloat:  5.0,
+		IntervalFloat: 5.0,
+		Exchange:      "activejob",
+		ExchangeType:  "direct",
+		PrefetchCount: 1,
 	}
 	goworker.SetSettings(settings)
-	goworker.Register("MyClass", myFunc)
+	goworker.Register("JobSystemTestJob", myFunc)
 }
 
 func main() {
