@@ -33,7 +33,7 @@ func (s *JSONSerializer) Serialize(job interfaces.Job) ([]byte, error) {
 }
 
 // Deserialize converts JSON bytes to a job
-func (s *JSONSerializer) Deserialize(data []byte) (interfaces.Job, error) {
+func (s *JSONSerializer) Deserialize(data []byte, _ interfaces.JobMetadata) (interfaces.Job, error) {
 	var message Message
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
