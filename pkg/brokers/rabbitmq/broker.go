@@ -164,12 +164,14 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.
 	}
 
 	// Store delivery tag for ACK/NACK
-	if rmqJob, ok := job.(*RMQJob); ok {
-		rmqJob.deliveryTag = delivery.DeliveryTag
-		rmqJob.channel = r.channel
+	// Always wrap in RMQJob
+	rmqJob := &RMQJob{
+		Job:         job,
+		deliveryTag: delivery.DeliveryTag,
+		channel:     r.channel,
 	}
 
-	return job, nil
+	return rmqJob, nil
 }
 
 // Ack acknowledges job completion

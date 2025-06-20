@@ -87,6 +87,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		e.config.Concurrency,
 		jobChan,
 		e.logger,
+		e.broker,
 	)
 
 	// Start components

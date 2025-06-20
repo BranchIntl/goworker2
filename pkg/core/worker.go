@@ -19,6 +19,7 @@ type Worker struct {
 	registry interfaces.Registry
 	stats    interfaces.Statistics
 	logger   seelog.LoggerInterface
+	broker   interfaces.Broker
 
 	// Statistics
 	processed int64
@@ -32,6 +33,7 @@ func NewWorker(
 	registry interfaces.Registry,
 	stats interfaces.Statistics,
 	logger seelog.LoggerInterface,
+	broker interfaces.Broker,
 ) *Worker {
 	hostname, _ := os.Hostname()
 
@@ -42,6 +44,7 @@ func NewWorker(
 		registry:  registry,
 		stats:     stats,
 		logger:    logger,
+		broker:    broker,
 		startTime: time.Now(),
 	}
 }
@@ -124,10 +127,18 @@ func (w *Worker) processJob(ctx context.Context, job interfaces.Job) {
 	err := w.executeJob(workerFunc, job)
 
 	if err != nil {
-		w.handleJobError(ctx, job, jobInfo, err, startTime)
-	} else {
-		w.handleJobSuccess(ctx, jobInfo, startTime)
-	}
+        w.handleJobError(ctx, job, jobInfo, err, startTime)
+        // Nack the job on error
+        if err := w.broker.Nack(ctx, job, true); err != nil {
+            w.logger.Errorf("Failed to nack job: %v", err)
+        }
+    } else {
+        w.handleJobSuccess(ctx, jobInfo, startTime)
+        // Ack the job on success
+        if err := w.broker.Ack(ctx, job); err != nil {
+            w.logger.Errorf("Failed to ack job: %v", err)
+        }
+    }
 }
 
 // executeJob runs the worker function with panic recovery
