@@ -8,8 +8,21 @@ import (
 )
 
 func myFunc(queue string, args ...interface{}) error {
-	fmt.Printf("From %s, %v\n", queue, args)
-	return nil
+	if len(args) == 0 {
+		log.Printf("Job received with no arguments")
+        return nil
+    }
+
+	argMap, ok := args[0].(map[string]interface{})
+    if !ok {
+        return fmt.Errorf("expected map[string]interface{}, got %T", args[0])
+    }
+
+    delete(argMap, "_aj_ruby2_keywords")
+
+    log.Printf("Job received on queue %s with arguments: %v", queue, argMap)
+
+    return nil
 }
 
 func init() {

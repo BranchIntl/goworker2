@@ -21,6 +21,7 @@ type WorkerPool struct {
 	activeWorkers int32
 	workers       []*Worker
 	wg            sync.WaitGroup
+	broker        interfaces.Broker
 }
 
 // NewWorkerPool creates a new worker pool
@@ -31,6 +32,7 @@ func NewWorkerPool(
 	concurrency int,
 	jobChan <-chan interfaces.Job,
 	logger seelog.LoggerInterface,
+	broker interfaces.Broker,
 ) *WorkerPool {
 	return &WorkerPool{
 		registry:    registry,
@@ -40,6 +42,7 @@ func NewWorkerPool(
 		jobChan:     jobChan,
 		logger:      logger,
 		workers:     make([]*Worker, 0, concurrency),
+		broker:     broker,
 	}
 }
 
@@ -54,6 +57,7 @@ func (wp *WorkerPool) Start(ctx context.Context) error {
 			wp.registry,
 			wp.stats,
 			wp.logger,
+			wp.broker,
 		)
 		wp.workers = append(wp.workers, worker)
 	}
