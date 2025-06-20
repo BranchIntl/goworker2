@@ -11,6 +11,7 @@ type Job interface {
 	GetArgs() []interface{}
 
 	// Job metadata
+	GetMetadata() JobMetadata
 	GetEnqueuedAt() time.Time
 	GetRetryCount() int
 	GetLastError() string
@@ -23,7 +24,7 @@ type Job interface {
 	GetPayload() Payload
 }
 
-// Payload represents the job payload (Resque compatible)
+// Payload represents the job payload
 type Payload struct {
 	Class string        `json:"class"`
 	Args  []interface{} `json:"args"`
@@ -38,4 +39,6 @@ type JobMetadata struct {
 	LastError   string
 	Priority    int
 	ScheduledAt *time.Time
+	Locale      string
+	Timezone    string
 }
