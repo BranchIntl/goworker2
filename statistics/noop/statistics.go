@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 )
 
 // NoOpStatistics implements the Statistics interface with no-op operations

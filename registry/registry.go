@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 )
 
 // Registry is a thread-safe worker function registry

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 	"github.com/cihub/seelog"
 )
 

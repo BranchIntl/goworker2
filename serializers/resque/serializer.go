@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/benmanns/goworker/pkg/interfaces"
+
+	"github.com/benmanns/goworker/interfaces"
 )
 
 // JSONSerializer implements the Serializer interface for JSON

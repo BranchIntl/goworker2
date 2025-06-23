@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 	"github.com/cihub/seelog"
 )
 
@@ -42,7 +42,7 @@ func NewWorkerPool(
 		jobChan:     jobChan,
 		logger:      logger,
 		workers:     make([]*Worker, 0, concurrency),
-		broker:     broker,
+		broker:      broker,
 	}
 }
 

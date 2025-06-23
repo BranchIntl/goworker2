@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 	"github.com/gomodule/redigo/redis"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 )
 
 // MemoryBroker implements the Broker interface using in-memory storage

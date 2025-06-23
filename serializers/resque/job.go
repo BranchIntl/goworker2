@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 )
 
 // Job represents a deserialized resque job

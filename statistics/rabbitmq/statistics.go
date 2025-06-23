@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benmanns/goworker/pkg/interfaces"
+	"github.com/benmanns/goworker/interfaces"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
