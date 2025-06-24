@@ -1,10 +1,10 @@
 package registry
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/errors"
 )
 
 // Registry is a thread-safe worker function registry
@@ -23,11 +23,11 @@ func NewRegistry() *Registry {
 // Register adds a worker function for a class
 func (r *Registry) Register(class string, worker core.WorkerFunc) error {
 	if class == "" {
-		return fmt.Errorf("class name cannot be empty")
+		return errors.ErrEmptyClassName
 	}
 
 	if worker == nil {
-		return fmt.Errorf("worker function cannot be nil")
+		return errors.ErrNilWorkerFunc
 	}
 
 	r.mu.Lock()

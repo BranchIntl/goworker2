@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 )
 
@@ -57,7 +58,7 @@ func (m *MemoryBroker) Health() error {
 	defer m.mu.RUnlock()
 
 	if !m.connected {
-		return fmt.Errorf("not connected")
+		return errors.ErrNotConnected
 	}
 	return nil
 }
@@ -83,7 +84,7 @@ func (m *MemoryBroker) Enqueue(ctx context.Context, j job.Job) error {
 	defer m.mu.Unlock()
 
 	if !m.connected {
-		return fmt.Errorf("broker not connected")
+		return errors.ErrNotConnected
 	}
 
 	queue := j.GetQueue()
@@ -100,7 +101,7 @@ func (m *MemoryBroker) Enqueue(ctx context.Context, j job.Job) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
-		return fmt.Errorf("queue %s is full", queue)
+		return errors.NewBrokerError("enqueue", queue, errors.ErrQueueFull)
 	}
 }
 
@@ -117,7 +118,8 @@ func (m *MemoryBroker) Dequeue(ctx context.Context, queue string) (job.Job, erro
 	select {
 	case j, ok := <-ch:
 		if !ok {
-			return nil, fmt.Errorf("queue %s is closed", queue)
+			return nil, errors.NewBrokerError("dequeue", queue,
+				fmt.Errorf("queue is closed"))
 		}
 		return j, nil
 	case <-ctx.Done():

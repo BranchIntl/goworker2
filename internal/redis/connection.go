@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	goworkerErrors "github.com/benmanns/goworker/errors"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -54,7 +55,8 @@ func CreatePool(options ConnectionOptions) (*redis.Pool, error) {
 func DialRedis(options ConnectionOptions) (redis.Conn, error) {
 	uri, err := url.Parse(options.GetURI())
 	if err != nil {
-		return nil, fmt.Errorf("invalid URI: %w", err)
+		return nil, goworkerErrors.NewConnectionError(options.GetURI(),
+			fmt.Errorf("invalid URI: %w", err))
 	}
 
 	var network string
@@ -104,20 +106,22 @@ func DialRedis(options ConnectionOptions) (redis.Conn, error) {
 		network = "unix"
 		host = uri.Path
 	default:
-		return nil, ErrInvalidScheme
+		return nil, goworkerErrors.NewConnectionError(options.GetURI(), ErrInvalidScheme)
 	}
 
 	// Establish connection
 	conn, err := redis.Dial(network, host, dialOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect: %w", err)
+		return nil, goworkerErrors.NewConnectionError(options.GetURI(),
+			fmt.Errorf("failed to connect: %w", err))
 	}
 
 	// Authenticate if password provided
 	if password != "" {
 		if _, err := conn.Do("AUTH", password); err != nil {
 			conn.Close()
-			return nil, fmt.Errorf("authentication failed: %w", err)
+			return nil, goworkerErrors.NewConnectionError(options.GetURI(),
+				fmt.Errorf("authentication failed: %w", err))
 		}
 	}
 
@@ -125,7 +129,8 @@ func DialRedis(options ConnectionOptions) (redis.Conn, error) {
 	if db != "" {
 		if _, err := conn.Do("SELECT", db); err != nil {
 			conn.Close()
-			return nil, fmt.Errorf("failed to select database: %w", err)
+			return nil, goworkerErrors.NewConnectionError(options.GetURI(),
+				fmt.Errorf("failed to select database: %w", err))
 		}
 	}
 

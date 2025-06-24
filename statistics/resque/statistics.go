@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/errors"
 	redisUtils "github.com/benmanns/goworker/internal/redis"
 	"github.com/gomodule/redigo/redis"
 )
@@ -30,7 +31,8 @@ func NewStatistics(options Options) *ResqueStatistics {
 func (r *ResqueStatistics) Connect(ctx context.Context) error {
 	pool, err := redisUtils.CreatePool(r.options)
 	if err != nil {
-		return fmt.Errorf("failed to create Redis pool: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("failed to create Redis pool: %w", err))
 	}
 
 	r.pool = pool
@@ -40,7 +42,8 @@ func (r *ResqueStatistics) Connect(ctx context.Context) error {
 	defer conn.Close()
 
 	if _, err := conn.Do("PING"); err != nil {
-		return fmt.Errorf("failed to ping Redis: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("ping failed: %w", err))
 	}
 
 	return nil
@@ -57,14 +60,15 @@ func (r *ResqueStatistics) Close() error {
 // Health checks the Redis connection health
 func (r *ResqueStatistics) Health() error {
 	if r.pool == nil {
-		return fmt.Errorf("not connected")
+		return errors.ErrNotConnected
 	}
 
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	if _, err := conn.Do("PING"); err != nil {
-		return fmt.Errorf("health check failed: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("health check failed: %w", err))
 	}
 
 	return nil

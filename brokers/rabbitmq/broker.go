@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -32,13 +33,15 @@ func NewBroker(options Options, serializer core.Serializer) *RabbitMQBroker {
 func (r *RabbitMQBroker) Connect(ctx context.Context) error {
 	conn, err := amqp.Dial(r.options.URI)
 	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("failed to connect to RabbitMQ: %w", err))
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
-		return fmt.Errorf("failed to open channel: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("failed to open channel: %w", err))
 	}
 
 	// Set QoS if specified
@@ -47,7 +50,8 @@ func (r *RabbitMQBroker) Connect(ctx context.Context) error {
 		if err != nil {
 			ch.Close()
 			conn.Close()
-			return fmt.Errorf("failed to set QoS: %w", err)
+			return errors.NewConnectionError(r.options.URI,
+				fmt.Errorf("failed to set QoS: %w", err))
 		}
 	}
 
@@ -74,7 +78,7 @@ func (r *RabbitMQBroker) Close() error {
 // COMMENT: Not doing a PING here unlike Redis, is this enough. Do we need to open/close a channel to confirm?
 func (r *RabbitMQBroker) Health() error {
 	if r.connection == nil || r.connection.IsClosed() {
-		return fmt.Errorf("not connected")
+		return errors.ErrNotConnected
 	}
 	return nil
 }
@@ -98,13 +102,14 @@ func (r *RabbitMQBroker) Capabilities() core.BrokerCapabilities {
 func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	// Ensure queue exists
 	if err := r.ensureQueue(j.GetQueue()); err != nil {
-		return fmt.Errorf("failed to ensure queue: %w", err)
+		return errors.NewBrokerError("ensure_queue", j.GetQueue(), err)
 	}
 
 	// Serialize job
 	data, err := r.serializer.Serialize(j)
 	if err != nil {
-		return fmt.Errorf("failed to serialize job: %w", err)
+		return errors.NewSerializationError(r.serializer.GetFormat(),
+			fmt.Errorf("serialize job: %w", err))
 	}
 
 	// Publish message
@@ -123,7 +128,7 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 		})
 
 	if err != nil {
-		return fmt.Errorf("failed to enqueue job: %w", err)
+		return errors.NewBrokerError("enqueue", j.GetQueue(), err)
 	}
 
 	return nil
@@ -133,13 +138,13 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
 	// Ensure queue exists
 	if err := r.ensureQueue(queue); err != nil {
-		return nil, fmt.Errorf("failed to ensure queue: %w", err)
+		return nil, errors.NewBrokerError("ensure_queue", queue, err)
 	}
 
 	// Get a single message
 	delivery, ok, err := r.channel.Get(queue, false) // Don't auto-ack
 	if err != nil {
-		return nil, fmt.Errorf("failed to get message: %w", err)
+		return nil, errors.NewBrokerError("dequeue", queue, err)
 	}
 
 	if !ok {
@@ -161,7 +166,8 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, er
 	if err != nil {
 		// Reject message if we can't deserialize it
 		delivery.Nack(false, false)
-		return nil, fmt.Errorf("failed to deserialize job: %w", err)
+		return nil, errors.NewSerializationError(r.serializer.GetFormat(),
+			fmt.Errorf("deserialize job: %w", err))
 	}
 
 	// Store delivery tag for ACK/NACK
@@ -221,7 +227,7 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options c
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+		return errors.NewBrokerError("create_queue", name, err)
 	}
 
 	r.queues[name] = true
@@ -232,7 +238,7 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options c
 func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
 	_, err := r.channel.QueueDelete(name, false, false, false)
 	if err != nil {
-		return fmt.Errorf("failed to delete queue: %w", err)
+		return errors.NewBrokerError("delete_queue", name, err)
 	}
 
 	delete(r.queues, name)
@@ -253,7 +259,7 @@ func (r *RabbitMQBroker) QueueExists(ctx context.Context, name string) (bool, er
 func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, error) {
 	state, err := r.channel.QueueInspect(name)
 	if err != nil {
-		return 0, fmt.Errorf("failed to inspect queue: %w", err)
+		return 0, errors.NewBrokerError("queue_length", name, err)
 	}
 	return int64(state.Messages), nil
 }

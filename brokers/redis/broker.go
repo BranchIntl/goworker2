@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/errors"
 	redisUtils "github.com/benmanns/goworker/internal/redis"
 	"github.com/benmanns/goworker/job"
 	"github.com/gomodule/redigo/redis"
@@ -32,7 +33,8 @@ func NewBroker(options Options, serializer core.Serializer) *RedisBroker {
 func (r *RedisBroker) Connect(ctx context.Context) error {
 	pool, err := redisUtils.CreatePool(r.options)
 	if err != nil {
-		return fmt.Errorf("failed to create Redis pool: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("failed to create Redis pool: %w", err))
 	}
 
 	r.pool = pool
@@ -42,7 +44,8 @@ func (r *RedisBroker) Connect(ctx context.Context) error {
 	defer conn.Close()
 
 	if _, err := conn.Do("PING"); err != nil {
-		return fmt.Errorf("failed to ping Redis: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("ping failed: %w", err))
 	}
 
 	return nil
@@ -59,14 +62,15 @@ func (r *RedisBroker) Close() error {
 // Health checks the Redis connection health
 func (r *RedisBroker) Health() error {
 	if r.pool == nil {
-		return fmt.Errorf("not connected")
+		return errors.ErrNotConnected
 	}
 
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	if _, err := conn.Do("PING"); err != nil {
-		return fmt.Errorf("health check failed: %w", err)
+		return errors.NewConnectionError(r.options.URI,
+			fmt.Errorf("health check failed: %w", err))
 	}
 
 	return nil
@@ -89,32 +93,39 @@ func (r *RedisBroker) Capabilities() core.BrokerCapabilities {
 
 // Enqueue adds a job to the queue
 func (r *RedisBroker) Enqueue(ctx context.Context, j job.Job) error {
+	if r.pool == nil {
+		return errors.ErrNotConnected
+	}
+
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	// Serialize job
 	data, err := r.serializer.Serialize(j)
 	if err != nil {
-		return fmt.Errorf("failed to serialize job: %w", err)
+		return errors.NewSerializationError(r.serializer.GetFormat(),
+			fmt.Errorf("serialize job: %w", err))
 	}
 
 	queueKey := r.queueKey(j.GetQueue())
 
 	// Add to queue
 	if _, err := conn.Do("RPUSH", queueKey, data); err != nil {
-		return fmt.Errorf("failed to enqueue job: %w", err)
+		return errors.NewBrokerError("enqueue", j.GetQueue(), err)
 	}
 
-	// Add queue to set of known queues
-	if _, err := conn.Do("SADD", r.queuesKey(), j.GetQueue()); err != nil {
-		return fmt.Errorf("failed to register queue: %w", err)
-	}
+	// Add queue to set of known queues (best effort)
+	conn.Do("SADD", r.queuesKey(), j.GetQueue())
 
 	return nil
 }
 
 // Dequeue retrieves a job from the queue
 func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
+	if r.pool == nil {
+		return nil, errors.ErrNotConnected
+	}
+
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -123,7 +134,7 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error
 	// Pop from queue
 	reply, err := conn.Do("LPOP", queueKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dequeue: %w", err)
+		return nil, errors.NewBrokerError("dequeue", queue, err)
 	}
 
 	if reply == nil {
@@ -132,7 +143,8 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error
 
 	data, ok := reply.([]byte)
 	if !ok {
-		return nil, fmt.Errorf("invalid data type from Redis")
+		return nil, errors.NewBrokerError("dequeue", queue,
+			fmt.Errorf("unexpected data type: %T", reply))
 	}
 
 	// Create metadata
@@ -144,7 +156,8 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error
 	// Deserialize job
 	j, err := r.serializer.Deserialize(data, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize job: %w", err)
+		return nil, errors.NewSerializationError(r.serializer.GetFormat(),
+			fmt.Errorf("deserialize job: %w", err))
 	}
 
 	return j, nil
@@ -175,6 +188,10 @@ func (r *RedisBroker) CreateQueue(ctx context.Context, name string, options core
 
 // DeleteQueue deletes a queue
 func (r *RedisBroker) DeleteQueue(ctx context.Context, name string) error {
+	if r.pool == nil {
+		return errors.ErrNotConnected
+	}
+
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -182,25 +199,27 @@ func (r *RedisBroker) DeleteQueue(ctx context.Context, name string) error {
 
 	// Delete the queue
 	if _, err := conn.Do("DEL", queueKey); err != nil {
-		return fmt.Errorf("failed to delete queue: %w", err)
+		return errors.NewBrokerError("delete_queue", name, err)
 	}
 
-	// Remove from set of queues
-	if _, err := conn.Do("SREM", r.queuesKey(), name); err != nil {
-		return fmt.Errorf("failed to unregister queue: %w", err)
-	}
+	// Remove from set of queues (best effort)
+	conn.Do("SREM", r.queuesKey(), name)
 
 	return nil
 }
 
 // QueueExists checks if a queue exists
 func (r *RedisBroker) QueueExists(ctx context.Context, name string) (bool, error) {
+	if r.pool == nil {
+		return false, errors.ErrNotConnected
+	}
+
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	exists, err := redis.Bool(conn.Do("SISMEMBER", r.queuesKey(), name))
 	if err != nil {
-		return false, fmt.Errorf("failed to check queue existence: %w", err)
+		return false, errors.NewBrokerError("queue_exists", name, err)
 	}
 
 	return exists, nil
@@ -208,6 +227,10 @@ func (r *RedisBroker) QueueExists(ctx context.Context, name string) (bool, error
 
 // QueueLength returns the number of jobs in a queue
 func (r *RedisBroker) QueueLength(ctx context.Context, name string) (int64, error) {
+	if r.pool == nil {
+		return 0, errors.ErrNotConnected
+	}
+
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -215,7 +238,7 @@ func (r *RedisBroker) QueueLength(ctx context.Context, name string) (int64, erro
 
 	length, err := redis.Int64(conn.Do("LLEN", queueKey))
 	if err != nil {
-		return 0, fmt.Errorf("failed to get queue length: %w", err)
+		return 0, errors.NewBrokerError("queue_length", name, err)
 	}
 
 	return length, nil

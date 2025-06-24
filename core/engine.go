@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
@@ -62,11 +63,13 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	// Connect broker and statistics
 	if err := e.broker.Connect(e.ctx); err != nil {
-		return fmt.Errorf("failed to connect broker: %w", err)
+		return errors.NewConnectionError("",
+			fmt.Errorf("failed to connect broker: %w", err))
 	}
 
 	if err := e.stats.Connect(e.ctx); err != nil {
-		return fmt.Errorf("failed to connect statistics: %w", err)
+		return errors.NewConnectionError("",
+			fmt.Errorf("failed to connect statistics: %w", err))
 	}
 
 	// Create job channel

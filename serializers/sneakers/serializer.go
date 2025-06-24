@@ -3,8 +3,8 @@ package sneakers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 )
 
@@ -26,7 +26,7 @@ func (s *SneakersSerializer) Serialize(j job.Job) ([]byte, error) {
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal job: %w", err)
+		return nil, errors.NewSerializationError(s.GetFormat(), err)
 	}
 
 	return data, nil
@@ -42,7 +42,7 @@ func (s *SneakersSerializer) Deserialize(data []byte, _ job.Metadata) (job.Job, 
 	}
 
 	if err := decoder.Decode(&message); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal job: %w", err)
+		return nil, errors.NewSerializationError(s.GetFormat(), err)
 	}
 
 	j := &Job{

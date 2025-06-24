@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
@@ -118,7 +119,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	// Get worker function
 	workerFunc, ok := w.registry.Get(job.GetClass())
 	if !ok {
-		err := fmt.Errorf("no worker registered for class: %s", job.GetClass())
+		err := errors.NewWorkerError(job.GetClass(), job.GetQueue(), errors.ErrWorkerNotFound)
 		w.handleJobError(ctx, job, jobInfo, err, startTime)
 		return
 	}
@@ -145,11 +146,16 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 func (w *Worker) executeJob(workerFunc WorkerFunc, job job.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic: %v", r)
+			err = errors.NewWorkerError(job.GetClass(), job.GetQueue(),
+				fmt.Errorf("panic: %v", r))
 		}
 	}()
 
-	return workerFunc(job.GetQueue(), job.GetArgs()...)
+	if execErr := workerFunc(job.GetQueue(), job.GetArgs()...); execErr != nil {
+		return errors.NewWorkerError(job.GetClass(), job.GetQueue(), execErr)
+	}
+
+	return nil
 }
 
 // handleJobSuccess records successful job completion

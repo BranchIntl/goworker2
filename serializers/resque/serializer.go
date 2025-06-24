@@ -3,8 +3,8 @@ package resque
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
+	"github.com/benmanns/goworker/errors"
 	"github.com/benmanns/goworker/job"
 )
 
@@ -27,7 +27,7 @@ func (s *ResqueSerializer) Serialize(j job.Job) ([]byte, error) {
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal job: %w", err)
+		return nil, errors.NewSerializationError(s.GetFormat(), err)
 	}
 
 	return data, nil
@@ -43,7 +43,7 @@ func (s *ResqueSerializer) Deserialize(data []byte, metadata job.Metadata) (job.
 	}
 
 	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal job: %w", err)
+		return nil, errors.NewSerializationError(s.GetFormat(), err)
 	}
 
 	j := &Job{
