@@ -3,7 +3,10 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/benmanns/goworker/interfaces"
@@ -172,4 +175,28 @@ func (e *Engine) Enqueue(job interfaces.Job) error {
 // Register adds a worker function
 func (e *Engine) Register(class string, worker interfaces.WorkerFunc) error {
 	return e.registry.Register(class, worker)
+}
+
+// Run starts the engine and blocks until shutdown signals are received
+// This is a convenience method that combines Start() + signal handling + Stop()
+func (e *Engine) Run(ctx context.Context) error {
+	// Start the engine
+	if err := e.Start(ctx); err != nil {
+		return err
+	}
+
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Wait for either context cancellation or signal
+	select {
+	case <-ctx.Done():
+		e.logger.Info("Context cancelled, shutting down...")
+	case sig := <-sigChan:
+		e.logger.Infof("Received signal %v, shutting down...", sig)
+	}
+
+	// Graceful shutdown
+	return e.Stop()
 }

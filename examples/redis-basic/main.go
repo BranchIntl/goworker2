@@ -6,9 +6,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/benmanns/goworker"
-	"github.com/benmanns/goworker/config"
-	"github.com/benmanns/goworker/redis"
+	"github.com/benmanns/goworker/brokers/redis"
+	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/registry"
+	"github.com/benmanns/goworker/serializers/resque"
+	redisStats "github.com/benmanns/goworker/statistics/redis"
 )
 
 func myFunc(queue string, args ...interface{}) error {
@@ -17,38 +19,63 @@ func myFunc(queue string, args ...interface{}) error {
 }
 
 func main() {
-	// Create configuration
-	cfg := config.DefaultConfig()
-	cfg.Broker.Type = "redis"
-	cfg.Broker.URI = "redis://localhost:6379/"
-	cfg.Broker.Namespace = "resque:"
-	cfg.Engine.Concurrency = 2
-	cfg.Engine.Queues = []config.QueueConfig{{Name: "myqueue", Weight: 1}}
-	cfg.Engine.PollInterval = 5 * time.Second
-	cfg.Engine.ExitOnComplete = false
-	cfg.Engine.UseNumber = true
-
-	// Create broker
-	broker := redis.NewBroker(cfg.Broker)
-
-	// Create statistics
-	stats := redis.NewStatistics(cfg.Statistics)
-
-	// Create registry
-	registry := redis.NewRegistry(cfg.Broker)
+	// Create Redis broker with its own options
+	brokerOpts := redis.DefaultOptions()
+	brokerOpts.URI = "redis://localhost:6379/"
+	brokerOpts.Namespace = "resque:"
 
 	// Create serializer
-	serializer := redis.NewSerializer(cfg.Broker)
+	serializer := resque.NewSerializer()
 
-	// Create engine
-	engine := goworker.NewEngine(broker, stats, registry, serializer)
+	// Create broker
+	broker := redis.NewBroker(brokerOpts, serializer)
+
+	// Create Redis statistics with its own options
+	statsOpts := redisStats.DefaultOptions()
+	statsOpts.URI = "redis://localhost:6379/"
+	statsOpts.Namespace = "resque:"
+	stats := redisStats.NewStatistics(statsOpts)
+
+	// Create registry
+	reg := registry.NewRegistry()
+
+	// Create engine with engine-specific options
+	engine := core.NewEngine(
+		broker,
+		stats,
+		reg,
+		serializer,
+		core.WithConcurrency(2),
+		core.WithQueues([]string{"myqueue"}),
+		core.WithPollInterval(5*time.Second),
+		core.WithExitOnComplete(false),
+	)
 
 	// Register job handler
-	registry.Register("MyClass", myFunc)
+	reg.Register("MyClass", myFunc)
 
-	// Start the engine
+	// Start the engine and wait for shutdown signals
+	// This is the simple approach using the convenience Run() method
 	ctx := context.Background()
-	if err := engine.Start(ctx); err != nil {
+	if err := engine.Run(ctx); err != nil {
 		log.Fatal("Error:", err)
 	}
+
+	// Alternative approach for more control:
+	// if err := engine.Start(ctx); err != nil {
+	//     log.Fatal("Error:", err)
+	// }
+	//
+	// // Set up signal handling
+	// sigChan := make(chan os.Signal, 1)
+	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	//
+	// // Wait for shutdown signal
+	// sig := <-sigChan
+	// fmt.Printf("Received signal %v, shutting down...\n", sig)
+	//
+	// // Stop the engine
+	// if err := engine.Stop(); err != nil {
+	//     log.Printf("Error stopping engine: %v", err)
+	// }
 }

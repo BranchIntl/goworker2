@@ -7,6 +7,62 @@ goworker is a Resque-compatible, Go-based background worker. It allows you to pu
 
 goworker workers can run alongside Ruby Resque clients so that you can keep all but your most resource-intensive jobs in Ruby.
 
+## Version 2.0 - New Architecture
+
+Version 2.0 introduces a new modular architecture with dependency injection, supporting multiple queue backends (Redis, RabbitMQ, in-memory) and statistics providers. Here's a quick example:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/benmanns/goworker/brokers/redis"
+	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/registry"
+	"github.com/benmanns/goworker/serializers/resque"
+	redisStats "github.com/benmanns/goworker/statistics/redis"
+)
+
+func myFunc(queue string, args ...interface{}) error {
+	log.Printf("Processing job from %s: %v\n", queue, args)
+	return nil
+}
+
+func main() {
+	// Create components
+	broker := redis.NewBroker(redis.DefaultOptions(), resque.NewSerializer())
+	stats := redisStats.NewStatistics(redisStats.DefaultOptions())
+	reg := registry.NewRegistry()
+
+	// Create engine
+	engine := core.NewEngine(
+		broker,
+		stats,
+		reg,
+		resque.NewSerializer(),
+		core.WithConcurrency(2),
+		core.WithQueues([]string{"myqueue"}),
+		core.WithPollInterval(5*time.Second),
+	)
+
+	// Register job handler
+	reg.Register("MyClass", myFunc)
+
+	// Start processing and wait for shutdown signals (Ctrl+C)
+	ctx := context.Background()
+	if err := engine.Run(ctx); err != nil {
+		log.Fatal("Error:", err)
+	}
+}
+```
+
+The new `engine.Run()` method automatically handles signal processing (SIGINT, SIGTERM) and graceful shutdown. For more control, you can use `engine.Start()` and handle signals manually.
+
+See the [examples](examples/) directory for more complete examples with different brokers.
+
 ## Installation
 
 To install goworker, use

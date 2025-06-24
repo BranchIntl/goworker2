@@ -10,6 +10,10 @@ type Engine interface {
 	// Start begins processing jobs
 	Start(ctx context.Context) error
 
+	// Run starts the engine and blocks until shutdown signals are received
+	// This is a convenience method that combines Start() + signal handling + Stop()
+	Run(ctx context.Context) error
+
 	// Stop gracefully shuts down the engine
 	Stop() error
 

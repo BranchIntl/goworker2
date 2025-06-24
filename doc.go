@@ -45,14 +45,11 @@
 //		// Register workers
 //		reg.Register("EmailJob", sendEmail)
 //
-//		// Start processing
+//		// Start processing and wait for shutdown signals
 //		ctx := context.Background()
-//		if err := engine.Start(ctx); err != nil {
+//		if err := engine.Run(ctx); err != nil {
 //			panic(err)
 //		}
-//
-//		// Graceful shutdown
-//		defer engine.Stop()
 //	}
 //
 // # Sharing Resources
