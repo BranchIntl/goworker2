@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/benmanns/goworker/core"
+	redisUtils "github.com/benmanns/goworker/internal/redis"
 	"github.com/benmanns/goworker/job"
 	"github.com/gomodule/redigo/redis"
 )
@@ -29,7 +30,7 @@ func NewBroker(options Options, serializer core.Serializer) *RedisBroker {
 
 // Connect establishes connection to Redis
 func (r *RedisBroker) Connect(ctx context.Context) error {
-	pool, err := createPool(r.options)
+	pool, err := redisUtils.CreatePool(r.options)
 	if err != nil {
 		return fmt.Errorf("failed to create Redis pool: %w", err)
 	}

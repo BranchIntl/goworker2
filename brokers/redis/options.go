@@ -34,6 +34,18 @@ type Options struct {
 	TLSCertPath   string
 }
 
+// ConnectionOptions interface implementation
+func (o Options) GetURI() string                   { return o.URI }
+func (o Options) GetMaxConnections() int           { return o.MaxConnections }
+func (o Options) GetMaxIdle() int                  { return o.MaxIdle }
+func (o Options) GetIdleTimeout() time.Duration    { return o.IdleTimeout }
+func (o Options) GetConnectTimeout() time.Duration { return o.ConnectTimeout }
+func (o Options) GetReadTimeout() time.Duration    { return o.ReadTimeout }
+func (o Options) GetWriteTimeout() time.Duration   { return o.WriteTimeout }
+func (o Options) GetUseTLS() bool                  { return o.UseTLS }
+func (o Options) GetTLSSkipVerify() bool           { return o.TLSSkipVerify }
+func (o Options) GetTLSCertPath() string           { return o.TLSCertPath }
+
 // DefaultOptions returns default Redis options
 func DefaultOptions() Options {
 	return Options{

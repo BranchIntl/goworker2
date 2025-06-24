@@ -1,4 +1,4 @@
-package resque
+package redis
 
 import (
 	"crypto/tls"
@@ -13,17 +13,32 @@ import (
 )
 
 var (
-	errInvalidScheme = errors.New("invalid Redis database URI scheme")
+	// ErrInvalidScheme is returned when the Redis URI scheme is invalid
+	ErrInvalidScheme = errors.New("invalid Redis database URI scheme")
 )
 
-// createPool creates a Redis connection pool
-func createPool(options Options) (*redis.Pool, error) {
+// ConnectionOptions defines the interface for Redis connection options
+type ConnectionOptions interface {
+	GetURI() string
+	GetMaxConnections() int
+	GetMaxIdle() int
+	GetIdleTimeout() time.Duration
+	GetConnectTimeout() time.Duration
+	GetReadTimeout() time.Duration
+	GetWriteTimeout() time.Duration
+	GetUseTLS() bool
+	GetTLSSkipVerify() bool
+	GetTLSCertPath() string
+}
+
+// CreatePool creates a Redis connection pool using the provided options
+func CreatePool(options ConnectionOptions) (*redis.Pool, error) {
 	return &redis.Pool{
-		MaxActive:   options.MaxConnections,
-		MaxIdle:     options.MaxIdle,
-		IdleTimeout: options.IdleTimeout,
+		MaxActive:   options.GetMaxConnections(),
+		MaxIdle:     options.GetMaxIdle(),
+		IdleTimeout: options.GetIdleTimeout(),
 		Dial: func() (redis.Conn, error) {
-			return dialRedis(options)
+			return DialRedis(options)
 		},
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			if time.Since(t) < time.Minute {
@@ -35,9 +50,9 @@ func createPool(options Options) (*redis.Pool, error) {
 	}, nil
 }
 
-// dialRedis establishes a Redis connection
-func dialRedis(options Options) (redis.Conn, error) {
-	uri, err := url.Parse(options.URI)
+// DialRedis establishes a Redis connection using the provided options
+func DialRedis(options ConnectionOptions) (redis.Conn, error) {
+	uri, err := url.Parse(options.GetURI())
 	if err != nil {
 		return nil, fmt.Errorf("invalid URI: %w", err)
 	}
@@ -50,9 +65,9 @@ func dialRedis(options Options) (redis.Conn, error) {
 
 	// Configure timeouts
 	dialOptions = append(dialOptions,
-		redis.DialConnectTimeout(options.ConnectTimeout),
-		redis.DialReadTimeout(options.ReadTimeout),
-		redis.DialWriteTimeout(options.WriteTimeout),
+		redis.DialConnectTimeout(options.GetConnectTimeout()),
+		redis.DialReadTimeout(options.GetReadTimeout()),
+		redis.DialWriteTimeout(options.GetWriteTimeout()),
 	)
 
 	switch uri.Scheme {
@@ -67,13 +82,13 @@ func dialRedis(options Options) (redis.Conn, error) {
 		}
 
 		// Configure TLS for rediss or if explicitly enabled
-		if uri.Scheme == "rediss" || options.UseTLS {
+		if uri.Scheme == "rediss" || options.GetUseTLS() {
 			tlsConfig := &tls.Config{
-				InsecureSkipVerify: options.TLSSkipVerify,
+				InsecureSkipVerify: options.GetTLSSkipVerify(),
 			}
 
-			if options.TLSCertPath != "" {
-				pool, err := loadCertPool(options.TLSCertPath)
+			if options.GetTLSCertPath() != "" {
+				pool, err := LoadCertPool(options.GetTLSCertPath())
 				if err != nil {
 					return nil, err
 				}
@@ -89,7 +104,7 @@ func dialRedis(options Options) (redis.Conn, error) {
 		network = "unix"
 		host = uri.Path
 	default:
-		return nil, errInvalidScheme
+		return nil, ErrInvalidScheme
 	}
 
 	// Establish connection
@@ -117,8 +132,8 @@ func dialRedis(options Options) (redis.Conn, error) {
 	return conn, nil
 }
 
-// loadCertPool loads a certificate pool from a file
-func loadCertPool(certPath string) (*x509.CertPool, error) {
+// LoadCertPool loads a certificate pool from a file
+func LoadCertPool(certPath string) (*x509.CertPool, error) {
 	rootCAs, _ := x509.SystemCertPool()
 	if rootCAs == nil {
 		rootCAs = x509.NewCertPool()

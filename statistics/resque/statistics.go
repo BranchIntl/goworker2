@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/benmanns/goworker/core"
+	redisUtils "github.com/benmanns/goworker/internal/redis"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -27,7 +28,7 @@ func NewStatistics(options Options) *ResqueStatistics {
 
 // Connect establishes connection to Redis
 func (r *ResqueStatistics) Connect(ctx context.Context) error {
-	pool, err := createPool(r.options)
+	pool, err := redisUtils.CreatePool(r.options)
 	if err != nil {
 		return fmt.Errorf("failed to create Redis pool: %w", err)
 	}
