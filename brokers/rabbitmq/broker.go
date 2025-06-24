@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/job"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -14,12 +15,12 @@ type RabbitMQBroker struct {
 	connection *amqp.Connection
 	channel    *amqp.Channel
 	options    Options
-	serializer interfaces.Serializer
+	serializer core.Serializer
 	queues     map[string]bool // Track declared queues
 }
 
 // NewBroker creates a new RabbitMQ broker
-func NewBroker(options Options, serializer interfaces.Serializer) *RabbitMQBroker {
+func NewBroker(options Options, serializer core.Serializer) *RabbitMQBroker {
 	return &RabbitMQBroker{
 		options:    options,
 		serializer: serializer,
@@ -84,8 +85,8 @@ func (r *RabbitMQBroker) Type() string {
 }
 
 // Capabilities returns RabbitMQ broker capabilities
-func (r *RabbitMQBroker) Capabilities() interfaces.BrokerCapabilities {
-	return interfaces.BrokerCapabilities{
+func (r *RabbitMQBroker) Capabilities() core.BrokerCapabilities {
+	return core.BrokerCapabilities{
 		SupportsAck:        true, // RabbitMQ supports ACK/NACK
 		SupportsDelay:      true, // Can be implemented with delayed exchange plugin
 		SupportsPriority:   true, // RabbitMQ supports message priority
@@ -94,31 +95,31 @@ func (r *RabbitMQBroker) Capabilities() interfaces.BrokerCapabilities {
 }
 
 // Enqueue adds a job to the queue
-func (r *RabbitMQBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
+func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	// Ensure queue exists
-	if err := r.ensureQueue(job.GetQueue()); err != nil {
+	if err := r.ensureQueue(j.GetQueue()); err != nil {
 		return fmt.Errorf("failed to ensure queue: %w", err)
 	}
 
 	// Serialize job
-	data, err := r.serializer.Serialize(job)
+	data, err := r.serializer.Serialize(j)
 	if err != nil {
 		return fmt.Errorf("failed to serialize job: %w", err)
 	}
 
 	// Publish message
 	err = r.channel.PublishWithContext(
-		ctx,            // context
-		"",             // exchange
-		job.GetQueue(), // routing key (queue name)
-		false,          // mandatory
-		false,          // immediate
+		ctx,          // context
+		"",           // exchange
+		j.GetQueue(), // routing key (queue name)
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         data,
 			DeliveryMode: amqp.Persistent, // Make message persistent
 			Timestamp:    time.Now(),
-			MessageId:    job.GetID(),
+			MessageId:    j.GetID(),
 		})
 
 	if err != nil {
@@ -129,7 +130,7 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, job interfaces.Job) error 
 }
 
 // Dequeue retrieves a job from the queue
-func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.Job, error) {
+func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
 	// Ensure queue exists
 	if err := r.ensureQueue(queue); err != nil {
 		return nil, fmt.Errorf("failed to ensure queue: %w", err)
@@ -146,7 +147,7 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.
 	}
 
 	// Create metadata
-	metadata := interfaces.JobMetadata{
+	metadata := job.Metadata{
 		Queue:      queue,
 		EnqueuedAt: delivery.Timestamp,
 	}
@@ -156,7 +157,7 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.
 	}
 
 	// Deserialize job
-	job, err := r.serializer.Deserialize(delivery.Body, metadata)
+	j, err := r.serializer.Deserialize(delivery.Body, metadata)
 	if err != nil {
 		// Reject message if we can't deserialize it
 		delivery.Nack(false, false)
@@ -166,7 +167,7 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.
 	// Store delivery tag for ACK/NACK
 	// Always wrap in RMQJob
 	rmqJob := &RMQJob{
-		Job:         job,
+		Job:         j,
 		deliveryTag: delivery.DeliveryTag,
 		channel:     r.channel,
 	}
@@ -175,23 +176,23 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (interfaces.
 }
 
 // Ack acknowledges job completion
-func (r *RabbitMQBroker) Ack(ctx context.Context, job interfaces.Job) error {
-	if rmqJob, ok := job.(*RMQJob); ok && rmqJob.deliveryTag > 0 {
+func (r *RabbitMQBroker) Ack(ctx context.Context, j job.Job) error {
+	if rmqJob, ok := j.(*RMQJob); ok && rmqJob.deliveryTag > 0 {
 		return rmqJob.channel.Ack(rmqJob.deliveryTag, false)
 	}
 	return nil
 }
 
 // Nack rejects a job and optionally requeues it
-func (r *RabbitMQBroker) Nack(ctx context.Context, job interfaces.Job, requeue bool) error {
-	if rmqJob, ok := job.(*RMQJob); ok && rmqJob.deliveryTag > 0 {
+func (r *RabbitMQBroker) Nack(ctx context.Context, j job.Job, requeue bool) error {
+	if rmqJob, ok := j.(*RMQJob); ok && rmqJob.deliveryTag > 0 {
 		return rmqJob.channel.Nack(rmqJob.deliveryTag, false, requeue)
 	}
 	return nil
 }
 
 // CreateQueue creates a new queue
-func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options interfaces.QueueOptions) error {
+func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
 	args := amqp.Table{}
 
 	// Set message TTL if specified
@@ -203,6 +204,11 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options i
 	if options.DeadLetterQueue != "" {
 		args["x-dead-letter-exchange"] = ""
 		args["x-dead-letter-routing-key"] = options.DeadLetterQueue
+	}
+
+	// Set max retries if specified
+	if options.MaxRetries > 0 {
+		args["x-max-retries"] = options.MaxRetries
 	}
 
 	_, err := r.channel.QueueDeclare(
@@ -237,24 +243,20 @@ func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
 func (r *RabbitMQBroker) QueueExists(ctx context.Context, name string) (bool, error) {
 	_, err := r.channel.QueueDeclarePassive(name, true, false, false, false, nil)
 	if err != nil {
-		if amqpErr, ok := err.(*amqp.Error); ok && amqpErr.Code == 404 {
-			return false, nil
-		}
-		return false, err
+		// Queue doesn't exist
+		return false, nil
 	}
 	return true, nil
 }
 
 // QueueLength returns the number of jobs in a queue
 func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, error) {
-	queue, err := r.channel.QueueDeclarePassive(name, true, false, false, false, nil)
+	state, err := r.channel.QueueInspect(name)
 	if err != nil {
 		return 0, fmt.Errorf("failed to inspect queue: %w", err)
 	}
-	return int64(queue.Messages), nil
+	return int64(state.Messages), nil
 }
-
-// Helper methods
 
 // ensureQueue makes sure a queue is declared
 func (r *RabbitMQBroker) ensureQueue(name string) error {
@@ -279,9 +281,9 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 	return nil
 }
 
-// RMQJob wraps a job with RabbitMQ-specific fields
+// RMQJob wraps a job with RabbitMQ-specific delivery information
 type RMQJob struct {
-	interfaces.Job
+	job.Job
 	deliveryTag uint64
 	channel     *amqp.Channel
 }

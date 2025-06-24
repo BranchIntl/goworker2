@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
 )
 
 // NoOpStatistics implements the Statistics interface with no-op operations
@@ -36,7 +36,7 @@ func (n *NoOpStatistics) Type() string {
 }
 
 // RegisterWorker registers a worker (no-op)
-func (n *NoOpStatistics) RegisterWorker(ctx context.Context, worker interfaces.WorkerInfo) error {
+func (n *NoOpStatistics) RegisterWorker(ctx context.Context, worker core.WorkerInfo) error {
 	return nil
 }
 
@@ -46,37 +46,37 @@ func (n *NoOpStatistics) UnregisterWorker(ctx context.Context, workerID string) 
 }
 
 // RecordJobStarted records that a job has started (no-op)
-func (n *NoOpStatistics) RecordJobStarted(ctx context.Context, job interfaces.JobInfo) error {
+func (n *NoOpStatistics) RecordJobStarted(ctx context.Context, job core.JobInfo) error {
 	return nil
 }
 
 // RecordJobCompleted records successful job completion (no-op)
-func (n *NoOpStatistics) RecordJobCompleted(ctx context.Context, job interfaces.JobInfo, duration time.Duration) error {
+func (n *NoOpStatistics) RecordJobCompleted(ctx context.Context, job core.JobInfo, duration time.Duration) error {
 	return nil
 }
 
 // RecordJobFailed records job failure (no-op)
-func (n *NoOpStatistics) RecordJobFailed(ctx context.Context, job interfaces.JobInfo, err error, duration time.Duration) error {
+func (n *NoOpStatistics) RecordJobFailed(ctx context.Context, job core.JobInfo, err error, duration time.Duration) error {
 	return nil
 }
 
 // GetWorkerStats returns empty statistics
-func (n *NoOpStatistics) GetWorkerStats(ctx context.Context, workerID string) (interfaces.WorkerStats, error) {
-	return interfaces.WorkerStats{
+func (n *NoOpStatistics) GetWorkerStats(ctx context.Context, workerID string) (core.WorkerStats, error) {
+	return core.WorkerStats{
 		ID: workerID,
 	}, nil
 }
 
 // GetQueueStats returns empty statistics
-func (n *NoOpStatistics) GetQueueStats(ctx context.Context, queue string) (interfaces.QueueStats, error) {
-	return interfaces.QueueStats{
+func (n *NoOpStatistics) GetQueueStats(ctx context.Context, queue string) (core.QueueStats, error) {
+	return core.QueueStats{
 		Name: queue,
 	}, nil
 }
 
 // GetGlobalStats returns empty statistics
-func (n *NoOpStatistics) GetGlobalStats(ctx context.Context) (interfaces.GlobalStats, error) {
-	return interfaces.GlobalStats{
-		QueueStats: make(map[string]interfaces.QueueStats),
+func (n *NoOpStatistics) GetGlobalStats(ctx context.Context) (core.GlobalStats, error) {
+	return core.GlobalStats{
+		QueueStats: make(map[string]core.QueueStats),
 	}, nil
 }

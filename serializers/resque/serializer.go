@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 )
 
 // JSONSerializer implements the Serializer interface for JSON
@@ -21,9 +21,9 @@ func NewSerializer() *JSONSerializer {
 }
 
 // Serialize converts a job to JSON bytes
-func (s *JSONSerializer) Serialize(job interfaces.Job) ([]byte, error) {
+func (s *JSONSerializer) Serialize(j job.Job) ([]byte, error) {
 	// For Resque compatibility, we only serialize the payload
-	payload := job.GetPayload()
+	payload := j.GetPayload()
 
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -34,8 +34,8 @@ func (s *JSONSerializer) Serialize(job interfaces.Job) ([]byte, error) {
 }
 
 // Deserialize converts JSON bytes to a job
-func (s *JSONSerializer) Deserialize(data []byte, metadata interfaces.JobMetadata) (interfaces.Job, error) {
-	var payload interfaces.Payload
+func (s *JSONSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Job, error) {
+	var payload job.Payload
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if s.useNumber {
@@ -46,12 +46,12 @@ func (s *JSONSerializer) Deserialize(data []byte, metadata interfaces.JobMetadat
 		return nil, fmt.Errorf("failed to unmarshal job: %w", err)
 	}
 
-	job := &Job{
+	j := &Job{
 		metadata: metadata,
 		payload:  payload,
 	}
 
-	return job, nil
+	return j, nil
 }
 
 // GetFormat returns the serialization format name

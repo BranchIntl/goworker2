@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
 
@@ -16,10 +16,10 @@ type Worker struct {
 	id       string
 	hostname string
 	pid      int
-	registry interfaces.Registry
-	stats    interfaces.Statistics
+	registry Registry
+	stats    Statistics
 	logger   seelog.LoggerInterface
-	broker   interfaces.Broker
+	broker   Broker
 
 	// Statistics
 	processed int64
@@ -30,10 +30,10 @@ type Worker struct {
 // NewWorker creates a new worker
 func NewWorker(
 	id string,
-	registry interfaces.Registry,
-	stats interfaces.Statistics,
+	registry Registry,
+	stats Statistics,
 	logger seelog.LoggerInterface,
-	broker interfaces.Broker,
+	broker Broker,
 ) *Worker {
 	hostname, _ := os.Hostname()
 
@@ -62,9 +62,9 @@ func (w *Worker) GetQueues() []string {
 }
 
 // Work starts processing jobs
-func (w *Worker) Work(ctx context.Context, jobs <-chan interfaces.Job) error {
+func (w *Worker) Work(ctx context.Context, jobs <-chan job.Job) error {
 	// Register worker
-	workerInfo := interfaces.WorkerInfo{
+	workerInfo := WorkerInfo{
 		ID:       w.GetID(),
 		Hostname: w.hostname,
 		Pid:      w.pid,
@@ -101,9 +101,9 @@ func (w *Worker) Work(ctx context.Context, jobs <-chan interfaces.Job) error {
 }
 
 // processJob handles a single job
-func (w *Worker) processJob(ctx context.Context, job interfaces.Job) {
+func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	startTime := time.Now()
-	jobInfo := interfaces.JobInfo{
+	jobInfo := JobInfo{
 		ID:       job.GetID(),
 		Queue:    job.GetQueue(),
 		Class:    job.GetClass(),
@@ -142,7 +142,7 @@ func (w *Worker) processJob(ctx context.Context, job interfaces.Job) {
 }
 
 // executeJob runs the worker function with panic recovery
-func (w *Worker) executeJob(workerFunc interfaces.WorkerFunc, job interfaces.Job) (err error) {
+func (w *Worker) executeJob(workerFunc WorkerFunc, job job.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
@@ -153,7 +153,7 @@ func (w *Worker) executeJob(workerFunc interfaces.WorkerFunc, job interfaces.Job
 }
 
 // handleJobSuccess records successful job completion
-func (w *Worker) handleJobSuccess(ctx context.Context, jobInfo interfaces.JobInfo, startTime time.Time) {
+func (w *Worker) handleJobSuccess(ctx context.Context, jobInfo JobInfo, startTime time.Time) {
 	duration := time.Since(startTime)
 
 	atomic.AddInt64(&w.processed, 1)
@@ -166,7 +166,7 @@ func (w *Worker) handleJobSuccess(ctx context.Context, jobInfo interfaces.JobInf
 }
 
 // handleJobError records job failure
-func (w *Worker) handleJobError(ctx context.Context, job interfaces.Job, jobInfo interfaces.JobInfo, err error, startTime time.Time) {
+func (w *Worker) handleJobError(ctx context.Context, job job.Job, jobInfo JobInfo, err error, startTime time.Time) {
 	duration := time.Since(startTime)
 
 	atomic.AddInt64(&w.failed, 1)
@@ -179,8 +179,8 @@ func (w *Worker) handleJobError(ctx context.Context, job interfaces.Job, jobInfo
 }
 
 // GetStats returns current worker statistics
-func (w *Worker) GetStats() interfaces.WorkerStats {
-	return interfaces.WorkerStats{
+func (w *Worker) GetStats() WorkerStats {
+	return WorkerStats{
 		ID:         w.GetID(),
 		Processed:  atomic.LoadInt64(&w.processed),
 		Failed:     atomic.LoadInt64(&w.failed),

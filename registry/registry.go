@@ -4,24 +4,24 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
 )
 
 // Registry is a thread-safe worker function registry
 type Registry struct {
 	mu      sync.RWMutex
-	workers map[string]interfaces.WorkerFunc
+	workers map[string]core.WorkerFunc
 }
 
 // NewRegistry creates a new registry
 func NewRegistry() *Registry {
 	return &Registry{
-		workers: make(map[string]interfaces.WorkerFunc),
+		workers: make(map[string]core.WorkerFunc),
 	}
 }
 
 // Register adds a worker function for a class
-func (r *Registry) Register(class string, worker interfaces.WorkerFunc) error {
+func (r *Registry) Register(class string, worker core.WorkerFunc) error {
 	if class == "" {
 		return fmt.Errorf("class name cannot be empty")
 	}
@@ -38,7 +38,7 @@ func (r *Registry) Register(class string, worker interfaces.WorkerFunc) error {
 }
 
 // Get retrieves a worker function by class
-func (r *Registry) Get(class string) (interfaces.WorkerFunc, bool) {
+func (r *Registry) Get(class string) (core.WorkerFunc, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -73,5 +73,5 @@ func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.workers = make(map[string]interfaces.WorkerFunc)
+	r.workers = make(map[string]core.WorkerFunc)
 }

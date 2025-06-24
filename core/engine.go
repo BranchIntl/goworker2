@@ -9,16 +9,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
 
 // Engine is the main orchestration engine
 type Engine struct {
-	broker     interfaces.Broker
-	stats      interfaces.Statistics
-	registry   interfaces.Registry
-	serializer interfaces.Serializer
+	broker     Broker
+	stats      Statistics
+	registry   Registry
+	serializer Serializer
 	config     *Config
 
 	poller     *Poller
@@ -33,10 +33,10 @@ type Engine struct {
 
 // NewEngine creates a new engine with dependency injection
 func NewEngine(
-	broker interfaces.Broker,
-	stats interfaces.Statistics,
-	registry interfaces.Registry,
-	serializer interfaces.Serializer,
+	broker Broker,
+	stats Statistics,
+	registry Registry,
+	serializer Serializer,
 	options ...EngineOption,
 ) *Engine {
 	config := defaultConfig()
@@ -70,7 +70,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 
 	// Create job channel
-	jobChan := make(chan interfaces.Job, e.config.JobBufferSize)
+	jobChan := make(chan job.Job, e.config.JobBufferSize)
 
 	// Create and start poller
 	e.poller = NewPoller(
@@ -146,7 +146,7 @@ func (e *Engine) Stop() error {
 }
 
 // Health returns the current health status
-func (e *Engine) Health() interfaces.HealthStatus {
+func (e *Engine) Health() HealthStatus {
 	queuedJobs := make(map[string]int64)
 	for _, queue := range e.config.Queues {
 		if length, err := e.broker.QueueLength(e.ctx, queue); err == nil {
@@ -157,7 +157,7 @@ func (e *Engine) Health() interfaces.HealthStatus {
 	brokerHealth := e.broker.Health()
 	statsHealth := e.stats.Health()
 
-	return interfaces.HealthStatus{
+	return HealthStatus{
 		Healthy:       brokerHealth == nil && statsHealth == nil,
 		BrokerHealth:  brokerHealth,
 		StatsHealth:   statsHealth,
@@ -168,12 +168,12 @@ func (e *Engine) Health() interfaces.HealthStatus {
 }
 
 // Enqueue adds a job to the queue
-func (e *Engine) Enqueue(job interfaces.Job) error {
+func (e *Engine) Enqueue(job job.Job) error {
 	return e.broker.Enqueue(e.ctx, job)
 }
 
 // Register adds a worker function
-func (e *Engine) Register(class string, worker interfaces.WorkerFunc) error {
+func (e *Engine) Register(class string, worker WorkerFunc) error {
 	return e.registry.Register(class, worker)
 }
 

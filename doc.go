@@ -65,13 +65,14 @@
 //		broker := redis.NewBroker(redis.DefaultOptions(), resque.NewSerializer())
 //		stats := resque.NewStatistics(resque.DefaultOptions())
 //		reg := registry.NewRegistry()
+//		serializer := resque.NewSerializer()
 //
 //		// Create engine
 //		engine := core.NewEngine(
-//			broker,
-//			stats,
-//			reg,
-//			resque.NewSerializer(),
+//			broker,    // implements core.Broker
+//			stats,     // implements core.Statistics
+//			reg,       // implements core.Registry
+//			serializer, // implements core.Serializer
 //			core.WithConcurrency(10),
 //			core.WithQueues([]string{"critical", "default"}),
 //		)

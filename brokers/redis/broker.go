@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/job"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -14,11 +15,11 @@ type RedisBroker struct {
 	pool       *redis.Pool
 	namespace  string
 	options    Options
-	serializer interfaces.Serializer
+	serializer core.Serializer
 }
 
 // NewBroker creates a new Redis broker
-func NewBroker(options Options, serializer interfaces.Serializer) *RedisBroker {
+func NewBroker(options Options, serializer core.Serializer) *RedisBroker {
 	return &RedisBroker{
 		namespace:  options.Namespace,
 		options:    options,
@@ -76,8 +77,8 @@ func (r *RedisBroker) Type() string {
 }
 
 // Capabilities returns Redis broker capabilities
-func (r *RedisBroker) Capabilities() interfaces.BrokerCapabilities {
-	return interfaces.BrokerCapabilities{
+func (r *RedisBroker) Capabilities() core.BrokerCapabilities {
+	return core.BrokerCapabilities{
 		SupportsAck:        false, // Redis doesn't have built-in ACK
 		SupportsDelay:      false, // Could be implemented with sorted sets
 		SupportsPriority:   false, // Could be implemented with multiple queues
@@ -86,17 +87,17 @@ func (r *RedisBroker) Capabilities() interfaces.BrokerCapabilities {
 }
 
 // Enqueue adds a job to the queue
-func (r *RedisBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
+func (r *RedisBroker) Enqueue(ctx context.Context, j job.Job) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	// Serialize job
-	data, err := r.serializer.Serialize(job)
+	data, err := r.serializer.Serialize(j)
 	if err != nil {
 		return fmt.Errorf("failed to serialize job: %w", err)
 	}
 
-	queueKey := r.queueKey(job.GetQueue())
+	queueKey := r.queueKey(j.GetQueue())
 
 	// Add to queue
 	if _, err := conn.Do("RPUSH", queueKey, data); err != nil {
@@ -104,7 +105,7 @@ func (r *RedisBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
 	}
 
 	// Add queue to set of known queues
-	if _, err := conn.Do("SADD", r.queuesKey(), job.GetQueue()); err != nil {
+	if _, err := conn.Do("SADD", r.queuesKey(), j.GetQueue()); err != nil {
 		return fmt.Errorf("failed to register queue: %w", err)
 	}
 
@@ -112,7 +113,7 @@ func (r *RedisBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
 }
 
 // Dequeue retrieves a job from the queue
-func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (interfaces.Job, error) {
+func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -134,39 +135,39 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (interfaces.Job
 	}
 
 	// Create metadata
-	metadata := interfaces.JobMetadata{
+	metadata := job.Metadata{
 		Queue:      queue,
 		EnqueuedAt: time.Now(), // Redis doesn't store this
 	}
 
 	// Deserialize job
-	job, err := r.serializer.Deserialize(data, metadata)
+	j, err := r.serializer.Deserialize(data, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize job: %w", err)
 	}
 
-	return job, nil
+	return j, nil
 }
 
 // Ack acknowledges job completion (no-op for Redis)
-func (r *RedisBroker) Ack(ctx context.Context, job interfaces.Job) error {
+func (r *RedisBroker) Ack(ctx context.Context, j job.Job) error {
 	// Redis doesn't have built-in ACK mechanism
 	// Job is already removed from queue by LPOP
 	return nil
 }
 
 // Nack rejects a job and optionally requeues it
-func (r *RedisBroker) Nack(ctx context.Context, job interfaces.Job, requeue bool) error {
+func (r *RedisBroker) Nack(ctx context.Context, j job.Job, requeue bool) error {
 	if !requeue {
 		return nil // Nothing to do
 	}
 
 	// Requeue the job
-	return r.Enqueue(ctx, job)
+	return r.Enqueue(ctx, j)
 }
 
 // CreateQueue creates a new queue (no-op for Redis)
-func (r *RedisBroker) CreateQueue(ctx context.Context, name string, options interfaces.QueueOptions) error {
+func (r *RedisBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
 	// Redis queues are created on-demand
 	return nil
 }

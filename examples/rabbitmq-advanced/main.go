@@ -11,7 +11,6 @@ import (
 
 	"github.com/benmanns/goworker/brokers/rabbitmq"
 	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/interfaces"
 	"github.com/benmanns/goworker/registry"
 	"github.com/benmanns/goworker/serializers/sneakers"
 	"github.com/benmanns/goworker/statistics/resque"
@@ -77,7 +76,7 @@ func main() {
 
 	// Create some queues with specific options
 	ctx := context.Background()
-	queueOpts := interfaces.QueueOptions{
+	queueOpts := core.QueueOptions{
 		MessageTTL:      30 * time.Minute,
 		DeadLetterQueue: "failed",
 		MaxRetries:      3,
@@ -89,7 +88,7 @@ func main() {
 
 	broker.CreateQueue(ctx, "activejob", queueOpts)
 	broker.CreateQueue(ctx, "images", queueOpts)
-	broker.CreateQueue(ctx, "critical", interfaces.QueueOptions{
+	broker.CreateQueue(ctx, "critical", core.QueueOptions{
 		MessageTTL: 10 * time.Minute,
 		MaxRetries: 5,
 	})

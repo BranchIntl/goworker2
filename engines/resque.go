@@ -22,77 +22,59 @@ package engines
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/benmanns/goworker/brokers/redis"
 	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/interfaces"
 	"github.com/benmanns/goworker/registry"
 	"github.com/benmanns/goworker/serializers/resque"
 	resqueStats "github.com/benmanns/goworker/statistics/resque"
 )
 
-// ResqueEngine provides a pre-configured engine for Resque compatibility.
-// It uses Redis for queuing, Resque JSON serialization, and Redis-based statistics.
-//
-// This engine is designed to be compatible with Ruby Resque workers and can
-// process jobs enqueued by Resque clients.
+// ResqueOptions holds configuration for the Resque-compatible engine
+type ResqueOptions struct {
+	RedisURI      string
+	RedisOptions  redis.Options
+	EngineOptions []core.EngineOption
+}
+
+// DefaultResqueOptions returns default options for Resque engine
+func DefaultResqueOptions() ResqueOptions {
+	return ResqueOptions{
+		RedisURI:      "redis://localhost:6379/",
+		RedisOptions:  redis.DefaultOptions(),
+		EngineOptions: []core.EngineOption{},
+	}
+}
+
+// ResqueEngine provides a pre-configured engine for Resque compatibility
 type ResqueEngine struct {
-	*core.Engine
+	engine     *core.Engine
 	broker     *redis.RedisBroker
 	stats      *resqueStats.ResqueStatistics
 	registry   *registry.Registry
 	serializer *resque.JSONSerializer
 }
 
-// ResqueOptions contains configuration for ResqueEngine.
-type ResqueOptions struct {
-	// RedisURI is the Redis connection URI (default: redis://localhost:6379/)
-	RedisURI string
-
-	// RedisOptions provides detailed Redis configuration
-	RedisOptions redis.Options
-
-	// EngineOptions contains core engine configuration options
-	EngineOptions []core.EngineOption
-}
-
-// DefaultResqueOptions returns default configuration for ResqueEngine.
-// The defaults provide a working configuration for local development.
-func DefaultResqueOptions() ResqueOptions {
-	return ResqueOptions{
-		RedisURI:     "redis://localhost:6379/",
-		RedisOptions: redis.DefaultOptions(),
-		EngineOptions: []core.EngineOption{
-			core.WithConcurrency(25),
-			core.WithQueues([]string{"default"}),
-		},
-	}
-}
-
-// NewResqueEngine creates a new pre-configured Resque-compatible engine.
-// The engine automatically configures Redis broker, Resque serializer,
-// and Redis-based statistics with compatible settings.
+// NewResqueEngine creates a new Resque-compatible engine
 func NewResqueEngine(options ResqueOptions) *ResqueEngine {
-	// Create serializer
-	serializer := resque.NewSerializer()
-
-	// Create Redis broker with custom options
-	brokerOpts := options.RedisOptions
+	// Override URI if provided
 	if options.RedisURI != "" {
-		brokerOpts.URI = options.RedisURI
+		options.RedisOptions.URI = options.RedisURI
 	}
-	broker := redis.NewBroker(brokerOpts, serializer)
 
-	// Create Resque statistics with same Redis config
-	statsOpts := resqueStats.DefaultOptions()
-	statsOpts.URI = brokerOpts.URI
-	statsOpts.Namespace = brokerOpts.Namespace
-	stats := resqueStats.NewStatistics(statsOpts)
+	// Create components
+	serializer := resque.NewSerializer()
+	broker := redis.NewBroker(options.RedisOptions, serializer)
 
-	// Create registry
+	statsOptions := resqueStats.DefaultOptions()
+	statsOptions.URI = options.RedisOptions.URI
+	statsOptions.Namespace = options.RedisOptions.Namespace
+	stats := resqueStats.NewStatistics(statsOptions)
+
 	registry := registry.NewRegistry()
 
-	// Create core engine
+	// Create engine
 	engine := core.NewEngine(
 		broker,
 		stats,
@@ -102,7 +84,7 @@ func NewResqueEngine(options ResqueOptions) *ResqueEngine {
 	)
 
 	return &ResqueEngine{
-		Engine:     engine,
+		engine:     engine,
 		broker:     broker,
 		stats:      stats,
 		registry:   registry,
@@ -110,44 +92,63 @@ func NewResqueEngine(options ResqueOptions) *ResqueEngine {
 	}
 }
 
-// Register adds a worker function for the given job class.
-// The class name should match the job class used when enqueuing jobs.
-func (e *ResqueEngine) Register(class string, worker interfaces.WorkerFunc) error {
+// Register adds a worker function for a job class
+func (e *ResqueEngine) Register(class string, worker core.WorkerFunc) error {
 	return e.registry.Register(class, worker)
 }
 
-// GetRegistry returns the worker registry for advanced usage.
-func (e *ResqueEngine) GetRegistry() interfaces.Registry {
-	return e.registry
+// Run starts the engine and blocks until shutdown
+func (e *ResqueEngine) Run(ctx context.Context) error {
+	return e.engine.Run(ctx)
 }
 
-// GetBroker returns the Redis broker for advanced usage.
-func (e *ResqueEngine) GetBroker() interfaces.Broker {
+// Start begins processing jobs
+func (e *ResqueEngine) Start(ctx context.Context) error {
+	return e.engine.Start(ctx)
+}
+
+// Stop gracefully shuts down the engine
+func (e *ResqueEngine) Stop() error {
+	return e.engine.Stop()
+}
+
+// MustRun starts the engine and panics on error
+func (e *ResqueEngine) MustRun(ctx context.Context) {
+	if err := e.Run(ctx); err != nil {
+		panic(fmt.Sprintf("ResqueEngine.Run failed: %v", err))
+	}
+}
+
+// MustStart begins processing and panics on error
+func (e *ResqueEngine) MustStart(ctx context.Context) {
+	if err := e.Start(ctx); err != nil {
+		panic(fmt.Sprintf("ResqueEngine.Start failed: %v", err))
+	}
+}
+
+// Health returns the engine health status
+func (e *ResqueEngine) Health() core.HealthStatus {
+	return e.engine.Health()
+}
+
+// Component accessors
+
+// GetBroker returns the Redis broker
+func (e *ResqueEngine) GetBroker() *redis.RedisBroker {
 	return e.broker
 }
 
-// GetStats returns the Resque statistics backend for monitoring.
-func (e *ResqueEngine) GetStats() interfaces.Statistics {
+// GetStats returns the Resque statistics
+func (e *ResqueEngine) GetStats() *resqueStats.ResqueStatistics {
 	return e.stats
 }
 
-// GetSerializer returns the Resque JSON serializer.
-func (e *ResqueEngine) GetSerializer() interfaces.Serializer {
+// GetRegistry returns the worker registry
+func (e *ResqueEngine) GetRegistry() *registry.Registry {
+	return e.registry
+}
+
+// GetSerializer returns the Resque serializer
+func (e *ResqueEngine) GetSerializer() *resque.JSONSerializer {
 	return e.serializer
-}
-
-// MustStart starts the engine and panics on error.
-// This is a convenience method for applications that want to fail fast.
-func (e *ResqueEngine) MustStart(ctx context.Context) {
-	if err := e.Start(ctx); err != nil {
-		panic(err)
-	}
-}
-
-// MustRun runs the engine with signal handling and panics on error.
-// This is a convenience method for applications that want to fail fast.
-func (e *ResqueEngine) MustRun(ctx context.Context) {
-	if err := e.Run(ctx); err != nil {
-		panic(err)
-	}
 }

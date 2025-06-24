@@ -5,24 +5,24 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 )
 
 // Job represents a deserialized resque job
 type Job struct {
-	metadata interfaces.JobMetadata
-	payload  interfaces.Payload
+	metadata job.Metadata
+	payload  job.Payload
 }
 
 // NewJob creates a new resque job
 func NewJob(queue string, class string, args []interface{}) *Job {
 	return &Job{
-		metadata: interfaces.JobMetadata{
+		metadata: job.Metadata{
 			ID:         generateJobID(),
 			Queue:      queue,
 			EnqueuedAt: time.Now(),
 		},
-		payload: interfaces.Payload{
+		payload: job.Payload{
 			Class: class,
 			Args:  args,
 		},
@@ -30,7 +30,7 @@ func NewJob(queue string, class string, args []interface{}) *Job {
 }
 
 // NewJobWithMetadata creates a new resque job with custom metadata
-func NewJobWithMetadata(metadata interfaces.JobMetadata, payload interfaces.Payload) *Job {
+func NewJobWithMetadata(metadata job.Metadata, payload job.Payload) *Job {
 	return &Job{
 		metadata: metadata,
 		payload:  payload,
@@ -83,11 +83,11 @@ func (j *Job) SetLastError(err string) {
 }
 
 // GetPayload returns the job payload
-func (j *Job) GetPayload() interfaces.Payload {
+func (j *Job) GetPayload() job.Payload {
 	return j.payload
 }
 
-func (j *Job) GetMetadata() interfaces.JobMetadata {
+func (j *Job) GetMetadata() job.Metadata {
 	return j.metadata
 }
 

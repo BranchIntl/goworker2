@@ -2,83 +2,61 @@ package engines
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/benmanns/goworker/brokers/rabbitmq"
 	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/interfaces"
 	"github.com/benmanns/goworker/registry"
 	"github.com/benmanns/goworker/serializers/sneakers"
 	"github.com/benmanns/goworker/statistics/noop"
 )
 
-// SneakersEngine provides a pre-configured engine for Sneakers/ActiveJob compatibility.
-// It uses RabbitMQ for queuing, ActiveJob JSON serialization, and NoOp statistics by default.
-//
-// This engine is designed to be compatible with Rails ActiveJob and Sneakers workers,
-// and can process jobs enqueued by ActiveJob clients.
-type SneakersEngine struct {
-	*core.Engine
-	broker     *rabbitmq.RabbitMQBroker
-	stats      *noop.NoOpStatistics
-	registry   *registry.Registry
-	serializer *sneakers.JSONSerializer
-}
-
-// SneakersOptions contains configuration for SneakersEngine.
+// SneakersOptions holds configuration for the Sneakers-compatible engine
 type SneakersOptions struct {
-	// RabbitMQURI is the RabbitMQ connection URI (default: amqp://guest:guest@localhost:5672/)
-	RabbitMQURI string
-
-	// RabbitMQOptions provides detailed RabbitMQ configuration
+	RabbitMQURI     string
 	RabbitMQOptions rabbitmq.Options
-
-	// Statistics backend (optional, defaults to NoOp for performance)
-	Statistics interfaces.Statistics
-
-	// EngineOptions contains core engine configuration options
-	EngineOptions []core.EngineOption
+	Statistics      core.Statistics
+	EngineOptions   []core.EngineOption
 }
 
-// DefaultSneakersOptions returns default configuration for SneakersEngine.
-// The defaults provide a working configuration for local development with RabbitMQ.
+// DefaultSneakersOptions returns default options for Sneakers engine
 func DefaultSneakersOptions() SneakersOptions {
 	return SneakersOptions{
 		RabbitMQURI:     "amqp://guest:guest@localhost:5672/",
 		RabbitMQOptions: rabbitmq.DefaultOptions(),
-		Statistics:      nil, // Will default to noop
-		EngineOptions: []core.EngineOption{
-			core.WithConcurrency(25),
-			core.WithQueues([]string{"default"}),
-		},
+		Statistics:      noop.NewStatistics(),
+		EngineOptions:   []core.EngineOption{},
 	}
 }
 
-// NewSneakersEngine creates a new pre-configured Sneakers-compatible engine.
-// The engine automatically configures RabbitMQ broker, ActiveJob serializer,
-// and statistics backend (NoOp by default for better performance).
+// SneakersEngine provides a pre-configured engine for Sneakers/ActiveJob compatibility
+type SneakersEngine struct {
+	engine     *core.Engine
+	broker     *rabbitmq.RabbitMQBroker
+	stats      core.Statistics
+	registry   *registry.Registry
+	serializer *sneakers.JSONSerializer
+}
+
+// NewSneakersEngine creates a new Sneakers-compatible engine
 func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
-	// Create serializer
-	serializer := sneakers.NewSerializer()
-
-	// Create RabbitMQ broker with custom options
-	brokerOpts := options.RabbitMQOptions
+	// Override URI if provided
 	if options.RabbitMQURI != "" {
-		brokerOpts.URI = options.RabbitMQURI
+		options.RabbitMQOptions.URI = options.RabbitMQURI
 	}
-	broker := rabbitmq.NewBroker(brokerOpts, serializer)
 
-	// Create statistics backend (default to noop)
-	var stats interfaces.Statistics
-	if options.Statistics != nil {
-		stats = options.Statistics
-	} else {
+	// Create components
+	serializer := sneakers.NewSerializer()
+	broker := rabbitmq.NewBroker(options.RabbitMQOptions, serializer)
+
+	stats := options.Statistics
+	if stats == nil {
 		stats = noop.NewStatistics()
 	}
 
-	// Create registry
 	registry := registry.NewRegistry()
 
-	// Create core engine
+	// Create engine
 	engine := core.NewEngine(
 		broker,
 		stats,
@@ -87,64 +65,72 @@ func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
 		options.EngineOptions...,
 	)
 
-	// Type assertion for concrete types (for getter methods)
-	var noopStats *noop.NoOpStatistics
-	if ns, ok := stats.(*noop.NoOpStatistics); ok {
-		noopStats = ns
-	}
-
 	return &SneakersEngine{
-		Engine:     engine,
+		engine:     engine,
 		broker:     broker,
-		stats:      noopStats,
+		stats:      stats,
 		registry:   registry,
 		serializer: serializer,
 	}
 }
 
-// Register adds a worker function for the given job class.
-// The class name should match the job class used when enqueuing ActiveJob jobs.
-func (e *SneakersEngine) Register(class string, worker interfaces.WorkerFunc) error {
+// Register adds a worker function for a job class
+func (e *SneakersEngine) Register(class string, worker core.WorkerFunc) error {
 	return e.registry.Register(class, worker)
 }
 
-// GetRegistry returns the worker registry for advanced usage.
-func (e *SneakersEngine) GetRegistry() interfaces.Registry {
-	return e.registry
+// Run starts the engine and blocks until shutdown
+func (e *SneakersEngine) Run(ctx context.Context) error {
+	return e.engine.Run(ctx)
 }
 
-// GetBroker returns the RabbitMQ broker for advanced usage.
-func (e *SneakersEngine) GetBroker() interfaces.Broker {
+// Start begins processing jobs
+func (e *SneakersEngine) Start(ctx context.Context) error {
+	return e.engine.Start(ctx)
+}
+
+// Stop gracefully shuts down the engine
+func (e *SneakersEngine) Stop() error {
+	return e.engine.Stop()
+}
+
+// MustRun starts the engine and panics on error
+func (e *SneakersEngine) MustRun(ctx context.Context) {
+	if err := e.Run(ctx); err != nil {
+		panic(fmt.Sprintf("SneakersEngine.Run failed: %v", err))
+	}
+}
+
+// MustStart begins processing and panics on error
+func (e *SneakersEngine) MustStart(ctx context.Context) {
+	if err := e.Start(ctx); err != nil {
+		panic(fmt.Sprintf("SneakersEngine.Start failed: %v", err))
+	}
+}
+
+// Health returns the engine health status
+func (e *SneakersEngine) Health() core.HealthStatus {
+	return e.engine.Health()
+}
+
+// Component accessors
+
+// GetBroker returns the RabbitMQ broker
+func (e *SneakersEngine) GetBroker() *rabbitmq.RabbitMQBroker {
 	return e.broker
 }
 
-// GetStats returns the statistics backend (NoOp by default).
-// If you provided a custom statistics backend in options, it will be returned.
-func (e *SneakersEngine) GetStats() interfaces.Statistics {
-	if e.stats != nil {
-		return e.stats
-	}
-	// Return noop stats as fallback
-	return noop.NewStatistics()
+// GetStats returns the statistics backend
+func (e *SneakersEngine) GetStats() core.Statistics {
+	return e.stats
 }
 
-// GetSerializer returns the ActiveJob/Sneakers JSON serializer.
-func (e *SneakersEngine) GetSerializer() interfaces.Serializer {
+// GetRegistry returns the worker registry
+func (e *SneakersEngine) GetRegistry() *registry.Registry {
+	return e.registry
+}
+
+// GetSerializer returns the Sneakers serializer
+func (e *SneakersEngine) GetSerializer() *sneakers.JSONSerializer {
 	return e.serializer
-}
-
-// MustStart starts the engine and panics on error.
-// This is a convenience method for applications that want to fail fast.
-func (e *SneakersEngine) MustStart(ctx context.Context) {
-	if err := e.Start(ctx); err != nil {
-		panic(err)
-	}
-}
-
-// MustRun runs the engine with signal handling and panics on error.
-// This is a convenience method for applications that want to fail fast.
-func (e *SneakersEngine) MustRun(ctx context.Context) {
-	if err := e.Run(ctx); err != nil {
-		panic(err)
-	}
 }

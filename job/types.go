@@ -1,4 +1,4 @@
-package interfaces
+package job
 
 import "time"
 
@@ -11,7 +11,7 @@ type Job interface {
 	GetArgs() []interface{}
 
 	// Job metadata
-	GetMetadata() JobMetadata
+	GetMetadata() Metadata
 	GetEnqueuedAt() time.Time
 	GetRetryCount() int
 	GetLastError() string
@@ -30,8 +30,8 @@ type Payload struct {
 	Args  []interface{} `json:"args"`
 }
 
-// JobMetadata contains additional job information
-type JobMetadata struct {
+// Metadata contains additional job information
+type Metadata struct {
 	ID          string
 	Queue       string
 	EnqueuedAt  time.Time

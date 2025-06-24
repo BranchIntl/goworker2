@@ -5,28 +5,28 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
 
 // Poller is a broker-agnostic job poller
 type Poller struct {
-	broker      interfaces.Broker
-	stats       interfaces.Statistics
+	broker      Broker
+	stats       Statistics
 	queues      []string
 	interval    time.Duration
-	jobChan     chan<- interfaces.Job
+	jobChan     chan<- job.Job
 	logger      seelog.LoggerInterface
 	strictOrder bool
 }
 
 // NewPoller creates a new poller
 func NewPoller(
-	broker interfaces.Broker,
-	stats interfaces.Statistics,
+	broker Broker,
+	stats Statistics,
 	queues []string,
 	interval time.Duration,
-	jobChan chan<- interfaces.Job,
+	jobChan chan<- job.Job,
 	logger seelog.LoggerInterface,
 ) *Poller {
 	return &Poller{
@@ -87,7 +87,7 @@ func (p *Poller) Start(ctx context.Context) error {
 }
 
 // pollOnce attempts to get a job from the queues
-func (p *Poller) pollOnce(ctx context.Context) (interfaces.Job, error) {
+func (p *Poller) pollOnce(ctx context.Context) (job.Job, error) {
 	queues := p.getQueueOrder()
 
 	for _, queue := range queues {

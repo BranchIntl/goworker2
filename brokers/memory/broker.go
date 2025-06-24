@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
+	"github.com/benmanns/goworker/job"
 )
 
 // MemoryBroker implements the Broker interface using in-memory storage
 type MemoryBroker struct {
 	mu        sync.RWMutex
-	queues    map[string]chan interfaces.Job
+	queues    map[string]chan job.Job
 	queueSize int
 	connected bool
 	options   Options
@@ -20,7 +21,7 @@ type MemoryBroker struct {
 // NewBroker creates a new in-memory broker
 func NewBroker(options Options) *MemoryBroker {
 	return &MemoryBroker{
-		queues:    make(map[string]chan interfaces.Job),
+		queues:    make(map[string]chan job.Job),
 		queueSize: options.QueueSize,
 		options:   options,
 	}
@@ -45,7 +46,7 @@ func (m *MemoryBroker) Close() error {
 		close(ch)
 	}
 
-	m.queues = make(map[string]chan interfaces.Job)
+	m.queues = make(map[string]chan job.Job)
 	m.connected = false
 	return nil
 }
@@ -67,8 +68,8 @@ func (m *MemoryBroker) Type() string {
 }
 
 // Capabilities returns broker capabilities
-func (m *MemoryBroker) Capabilities() interfaces.BrokerCapabilities {
-	return interfaces.BrokerCapabilities{
+func (m *MemoryBroker) Capabilities() core.BrokerCapabilities {
+	return core.BrokerCapabilities{
 		SupportsAck:        false,
 		SupportsDelay:      false,
 		SupportsPriority:   false,
@@ -77,7 +78,7 @@ func (m *MemoryBroker) Capabilities() interfaces.BrokerCapabilities {
 }
 
 // Enqueue adds a job to the queue
-func (m *MemoryBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
+func (m *MemoryBroker) Enqueue(ctx context.Context, j job.Job) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -85,16 +86,16 @@ func (m *MemoryBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
 		return fmt.Errorf("broker not connected")
 	}
 
-	queue := job.GetQueue()
+	queue := j.GetQueue()
 	ch, exists := m.queues[queue]
 	if !exists {
 		// Create queue on demand
-		ch = make(chan interfaces.Job, m.queueSize)
+		ch = make(chan job.Job, m.queueSize)
 		m.queues[queue] = ch
 	}
 
 	select {
-	case ch <- job:
+	case ch <- j:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -104,7 +105,7 @@ func (m *MemoryBroker) Enqueue(ctx context.Context, job interfaces.Job) error {
 }
 
 // Dequeue retrieves a job from the queue
-func (m *MemoryBroker) Dequeue(ctx context.Context, queue string) (interfaces.Job, error) {
+func (m *MemoryBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
 	m.mu.RLock()
 	ch, exists := m.queues[queue]
 	m.mu.RUnlock()
@@ -114,11 +115,11 @@ func (m *MemoryBroker) Dequeue(ctx context.Context, queue string) (interfaces.Jo
 	}
 
 	select {
-	case job, ok := <-ch:
+	case j, ok := <-ch:
 		if !ok {
 			return nil, fmt.Errorf("queue %s is closed", queue)
 		}
-		return job, nil
+		return j, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
@@ -127,25 +128,25 @@ func (m *MemoryBroker) Dequeue(ctx context.Context, queue string) (interfaces.Jo
 }
 
 // Ack acknowledges job completion (no-op for memory broker)
-func (m *MemoryBroker) Ack(ctx context.Context, job interfaces.Job) error {
+func (m *MemoryBroker) Ack(ctx context.Context, j job.Job) error {
 	return nil
 }
 
 // Nack rejects a job and optionally requeues it
-func (m *MemoryBroker) Nack(ctx context.Context, job interfaces.Job, requeue bool) error {
+func (m *MemoryBroker) Nack(ctx context.Context, j job.Job, requeue bool) error {
 	if requeue {
-		return m.Enqueue(ctx, job)
+		return m.Enqueue(ctx, j)
 	}
 	return nil
 }
 
 // CreateQueue creates a new queue
-func (m *MemoryBroker) CreateQueue(ctx context.Context, name string, options interfaces.QueueOptions) error {
+func (m *MemoryBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if _, exists := m.queues[name]; !exists {
-		m.queues[name] = make(chan interfaces.Job, m.queueSize)
+		m.queues[name] = make(chan job.Job, m.queueSize)
 	}
 
 	return nil

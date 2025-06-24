@@ -6,33 +6,33 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 	"github.com/cihub/seelog"
 )
 
 // WorkerPool manages a pool of workers
 type WorkerPool struct {
-	registry      interfaces.Registry
-	stats         interfaces.Statistics
-	serializer    interfaces.Serializer
+	registry      Registry
+	stats         Statistics
+	serializer    Serializer
 	concurrency   int
-	jobChan       <-chan interfaces.Job
+	jobChan       <-chan job.Job
 	logger        seelog.LoggerInterface
 	activeWorkers int32
 	workers       []*Worker
 	wg            sync.WaitGroup
-	broker        interfaces.Broker
+	broker        Broker
 }
 
 // NewWorkerPool creates a new worker pool
 func NewWorkerPool(
-	registry interfaces.Registry,
-	stats interfaces.Statistics,
-	serializer interfaces.Serializer,
+	registry Registry,
+	stats Statistics,
+	serializer Serializer,
 	concurrency int,
-	jobChan <-chan interfaces.Job,
+	jobChan <-chan job.Job,
 	logger seelog.LoggerInterface,
-	broker interfaces.Broker,
+	broker Broker,
 ) *WorkerPool {
 	return &WorkerPool{
 		registry:    registry,
@@ -88,8 +88,8 @@ func (wp *WorkerPool) ActiveWorkers() int {
 }
 
 // GetWorkerStats returns statistics for all workers
-func (wp *WorkerPool) GetWorkerStats() []interfaces.WorkerStats {
-	stats := make([]interfaces.WorkerStats, 0, len(wp.workers))
+func (wp *WorkerPool) GetWorkerStats() []WorkerStats {
+	stats := make([]WorkerStats, 0, len(wp.workers))
 	for _, worker := range wp.workers {
 		stats = append(stats, worker.GetStats())
 	}

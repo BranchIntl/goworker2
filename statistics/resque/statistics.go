@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/core"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -75,7 +75,7 @@ func (r *ResqueStatistics) Type() string {
 }
 
 // RegisterWorker registers a worker in Redis
-func (r *ResqueStatistics) RegisterWorker(ctx context.Context, worker interfaces.WorkerInfo) error {
+func (r *ResqueStatistics) RegisterWorker(ctx context.Context, worker core.WorkerInfo) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -141,7 +141,7 @@ func (r *ResqueStatistics) UnregisterWorker(ctx context.Context, workerID string
 }
 
 // RecordJobStarted records that a job has started
-func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job interfaces.JobInfo) error {
+func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job core.JobInfo) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -167,7 +167,7 @@ func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job interfaces.
 }
 
 // RecordJobCompleted records successful job completion
-func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job interfaces.JobInfo, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job core.JobInfo, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -189,7 +189,7 @@ func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job interface
 }
 
 // RecordJobFailed records job failure
-func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job interfaces.JobInfo, err error, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job core.JobInfo, err error, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -202,24 +202,6 @@ func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job interfaces.J
 		return fmt.Errorf("failed to increment worker failed: %w", err)
 	}
 
-	// Store failure info
-	failure := map[string]interface{}{
-		"failed_at": time.Now().Format(time.RFC3339),
-		"queue":     job.Queue,
-		"class":     job.Class,
-		"error":     err.Error(),
-		"worker":    job.WorkerID,
-	}
-
-	failureJSON, err := json.Marshal(failure)
-	if err != nil {
-		return fmt.Errorf("failed to marshal failure: %w", err)
-	}
-
-	if _, err := conn.Do("RPUSH", r.failedKey(), failureJSON); err != nil {
-		return fmt.Errorf("failed to push failure: %w", err)
-	}
-
 	// Clear worker job
 	if _, err := conn.Do("DEL", r.workerJobKey(job.WorkerID)); err != nil {
 		return fmt.Errorf("failed to clear worker job: %w", err)
@@ -229,93 +211,104 @@ func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job interfaces.J
 }
 
 // GetWorkerStats returns statistics for a specific worker
-func (r *ResqueStatistics) GetWorkerStats(ctx context.Context, workerID string) (interfaces.WorkerStats, error) {
+func (r *ResqueStatistics) GetWorkerStats(ctx context.Context, workerID string) (core.WorkerStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
+	// Get processed count
 	processed, err := redis.Int64(conn.Do("GET", r.statProcessedKey(workerID)))
 	if err != nil && err != redis.ErrNil {
-		return interfaces.WorkerStats{}, fmt.Errorf("failed to get processed count: %w", err)
+		return core.WorkerStats{}, fmt.Errorf("failed to get processed count: %w", err)
 	}
 
+	// Get failed count
 	failed, err := redis.Int64(conn.Do("GET", r.statFailedKey(workerID)))
 	if err != nil && err != redis.ErrNil {
-		return interfaces.WorkerStats{}, fmt.Errorf("failed to get failed count: %w", err)
+		return core.WorkerStats{}, fmt.Errorf("failed to get failed count: %w", err)
 	}
 
-	startedStr, err := redis.String(conn.Do("GET", r.workerStartedKey(workerID)))
-	if err != nil && err != redis.ErrNil {
-		return interfaces.WorkerStats{}, fmt.Errorf("failed to get started time: %w", err)
-	}
-
+	// Get start time
+	startTimeStr, err := redis.String(conn.Do("GET", r.workerStartedKey(workerID)))
 	var startTime time.Time
-	if startedStr != "" {
-		startTime, _ = time.Parse(time.RFC3339, startedStr)
+	if err == nil {
+		startTime, _ = time.Parse(time.RFC3339, startTimeStr)
 	}
 
-	return interfaces.WorkerStats{
+	// Check if worker has current job
+	inProgress := int64(0)
+	exists, err := redis.Bool(conn.Do("EXISTS", r.workerJobKey(workerID)))
+	if err == nil && exists {
+		inProgress = 1
+	}
+
+	return core.WorkerStats{
 		ID:         workerID,
 		Processed:  processed,
 		Failed:     failed,
-		InProgress: 0, // Could check if worker has active job
+		InProgress: inProgress,
 		StartTime:  startTime,
-		LastJob:    time.Now(), // Could track this
+		LastJob:    time.Now(), // Could track this better
 	}, nil
 }
 
-// GetQueueStats returns statistics for a specific queue
-func (r *ResqueStatistics) GetQueueStats(ctx context.Context, queue string) (interfaces.QueueStats, error) {
+// GetQueueStats returns statistics for a queue
+func (r *ResqueStatistics) GetQueueStats(ctx context.Context, queue string) (core.QueueStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
+	queueKey := r.queueKey(queue)
+
 	// Get queue length
-	length, err := redis.Int64(conn.Do("LLEN", r.queueKey(queue)))
+	length, err := redis.Int64(conn.Do("LLEN", queueKey))
 	if err != nil {
-		return interfaces.QueueStats{}, fmt.Errorf("failed to get queue length: %w", err)
+		return core.QueueStats{}, fmt.Errorf("failed to get queue length: %w", err)
 	}
 
-	// Count workers processing this queue
-	// This would require tracking which workers are assigned to which queues
-
-	return interfaces.QueueStats{
+	return core.QueueStats{
 		Name:      queue,
 		Length:    length,
-		Processed: 0, // Would need per-queue counters
-		Failed:    0, // Would need per-queue counters
-		Workers:   0, // Would need to track
+		Processed: 0, // Could track this per queue
+		Failed:    0, // Could track this per queue
+		Workers:   0, // Could track active workers per queue
 	}, nil
 }
 
 // GetGlobalStats returns global statistics
-func (r *ResqueStatistics) GetGlobalStats(ctx context.Context) (interfaces.GlobalStats, error) {
+func (r *ResqueStatistics) GetGlobalStats(ctx context.Context) (core.GlobalStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
+	// Get global processed count
 	processed, err := redis.Int64(conn.Do("GET", r.statProcessedKey("")))
 	if err != nil && err != redis.ErrNil {
-		return interfaces.GlobalStats{}, fmt.Errorf("failed to get global processed: %w", err)
+		return core.GlobalStats{}, fmt.Errorf("failed to get global processed: %w", err)
 	}
 
+	// Get global failed count
 	failed, err := redis.Int64(conn.Do("GET", r.statFailedKey("")))
 	if err != nil && err != redis.ErrNil {
-		return interfaces.GlobalStats{}, fmt.Errorf("failed to get global failed: %w", err)
+		return core.GlobalStats{}, fmt.Errorf("failed to get global failed: %w", err)
 	}
 
-	// Count active workers
-	workers, err := redis.Strings(conn.Do("SMEMBERS", r.workersKey()))
+	// Get active workers count
+	activeWorkers, err := redis.Int64(conn.Do("SCARD", r.workersKey()))
 	if err != nil {
-		return interfaces.GlobalStats{}, fmt.Errorf("failed to get workers: %w", err)
+		return core.GlobalStats{}, fmt.Errorf("failed to get active workers: %w", err)
 	}
 
-	return interfaces.GlobalStats{
+	// For now, return empty queue stats map
+	// Could be enhanced to get stats for all known queues
+	queueStats := make(map[string]core.QueueStats)
+
+	return core.GlobalStats{
 		TotalProcessed: processed,
 		TotalFailed:    failed,
-		ActiveWorkers:  int64(len(workers)),
-		QueueStats:     make(map[string]interfaces.QueueStats), // Would need to populate
+		ActiveWorkers:  activeWorkers,
+		QueueStats:     queueStats,
 	}, nil
 }
 
-// Helper methods for key generation
+// Helper methods for Redis keys
 
 func (r *ResqueStatistics) workerKey(workerID string) string {
 	return fmt.Sprintf("%sworker:%s", r.namespace, workerID)
@@ -344,7 +337,7 @@ func (r *ResqueStatistics) workerStartedKey(workerID string) string {
 }
 
 func (r *ResqueStatistics) workerJobKey(workerID string) string {
-	return fmt.Sprintf("%sworker:%s", r.namespace, workerID)
+	return fmt.Sprintf("%sworker:%s:job", r.namespace, workerID)
 }
 
 func (r *ResqueStatistics) failedKey() string {

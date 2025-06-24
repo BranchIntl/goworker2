@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/benmanns/goworker/interfaces"
+	"github.com/benmanns/goworker/job"
 	"github.com/google/uuid"
 )
 
 type Job struct {
-	metadata interfaces.JobMetadata
-	payload  interfaces.Payload
+	metadata job.Metadata
+	payload  job.Payload
 }
 
 type Message struct {
@@ -29,12 +29,12 @@ type Message struct {
 
 func NewJob(queue string, class string, args []interface{}) *Job {
 	return &Job{
-		metadata: interfaces.JobMetadata{
+		metadata: job.Metadata{
 			ID:         uuid.NewString(),
 			Queue:      queue,
 			EnqueuedAt: time.Now(),
 		},
-		payload: interfaces.Payload{
+		payload: job.Payload{
 			Class: class,
 			Args:  args,
 		},
@@ -77,15 +77,15 @@ func (j *Job) SetLastError(err string) {
 	j.metadata.LastError = err
 }
 
-func (j *Job) GetPayload() interfaces.Payload {
+func (j *Job) GetPayload() job.Payload {
 	return j.payload
 }
 
-func (j *Job) GetMetadata() interfaces.JobMetadata {
+func (j *Job) GetMetadata() job.Metadata {
 	return j.metadata
 }
 
-func ConstructMessage(j interfaces.Job) Message {
+func ConstructMessage(j job.Job) Message {
 	payload := j.GetPayload()
 	metadata := j.GetMetadata()
 	return Message{
@@ -103,14 +103,14 @@ func ConstructMessage(j interfaces.Job) Message {
 	}
 }
 
-func ConstructPayload(msg Message) interfaces.Payload {
-	return interfaces.Payload{
+func ConstructPayload(msg Message) job.Payload {
+	return job.Payload{
 		Class: msg.JobClass,
 		Args:  msg.Arguments,
 	}
 }
 
-func ConstructMetadata(msg Message) interfaces.JobMetadata {
+func ConstructMetadata(msg Message) job.Metadata {
 	var enqueuedAt time.Time
 	if msg.EnqueuedAt != "" {
 		parsedTime, err := time.Parse("2006-01-02T15:04:05Z", msg.EnqueuedAt)
@@ -125,7 +125,7 @@ func ConstructMetadata(msg Message) interfaces.JobMetadata {
 			lastError = string(jsonBytes)
 		}
 	}
-	return interfaces.JobMetadata{
+	return job.Metadata{
 		ID:         msg.JobID,
 		Queue:      msg.QueueName,
 		Priority:   msg.Priority,
