@@ -10,7 +10,7 @@ import (
 	"github.com/benmanns/goworker/core"
 	"github.com/benmanns/goworker/registry"
 	"github.com/benmanns/goworker/serializers/sneakers"
-	rabbitmqStats "github.com/benmanns/goworker/statistics/rabbitmq"
+	"github.com/benmanns/goworker/statistics/noop"
 )
 
 func myFunc(queue string, args ...interface{}) error {
@@ -32,9 +32,7 @@ func main() {
 	broker := rabbitmq.NewBroker(brokerOpts, serializer)
 
 	// Create RabbitMQ statistics with its own options
-	statsOpts := rabbitmqStats.DefaultOptions()
-	statsOpts.URI = "amqp://guest:guest@localhost:5672/"
-	stats := rabbitmqStats.NewStatistics(statsOpts)
+	stats := noop.NewStatistics()
 
 	// Create registry
 	reg := registry.NewRegistry()
