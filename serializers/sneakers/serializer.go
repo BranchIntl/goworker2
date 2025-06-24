@@ -8,20 +8,20 @@ import (
 	"github.com/benmanns/goworker/job"
 )
 
-// JSONSerializer implements the Serializer interface for JSON
-type JSONSerializer struct {
+// SneakersSerializer implements the Serializer interface for Sneakers format
+type SneakersSerializer struct {
 	useNumber bool
 }
 
-// NewSerializer creates a new JSON serializer
-func NewSerializer() *JSONSerializer {
-	return &JSONSerializer{
+// NewSerializer creates a new Sneakers serializer
+func NewSerializer() *SneakersSerializer {
+	return &SneakersSerializer{
 		useNumber: false,
 	}
 }
 
 // Serialize converts a job to JSON bytes
-func (s *JSONSerializer) Serialize(j job.Job) ([]byte, error) {
+func (s *SneakersSerializer) Serialize(j job.Job) ([]byte, error) {
 	message := ConstructMessage(j)
 
 	data, err := json.Marshal(message)
@@ -33,7 +33,7 @@ func (s *JSONSerializer) Serialize(j job.Job) ([]byte, error) {
 }
 
 // Deserialize converts JSON bytes to a job
-func (s *JSONSerializer) Deserialize(data []byte, _ job.Metadata) (job.Job, error) {
+func (s *SneakersSerializer) Deserialize(data []byte, _ job.Metadata) (job.Job, error) {
 	var message Message
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -54,16 +54,16 @@ func (s *JSONSerializer) Deserialize(data []byte, _ job.Metadata) (job.Job, erro
 }
 
 // GetFormat returns the serialization format name
-func (s *JSONSerializer) GetFormat() string {
+func (s *SneakersSerializer) GetFormat() string {
 	return "json"
 }
 
 // UseNumber returns whether to use json.Number
-func (s *JSONSerializer) UseNumber() bool {
+func (s *SneakersSerializer) UseNumber() bool {
 	return s.useNumber
 }
 
 // SetUseNumber sets whether to use json.Number
-func (s *JSONSerializer) SetUseNumber(useNumber bool) {
+func (s *SneakersSerializer) SetUseNumber(useNumber bool) {
 	s.useNumber = useNumber
 }

@@ -53,7 +53,7 @@ type ResqueEngine struct {
 	broker     *redis.RedisBroker
 	stats      *resqueStats.ResqueStatistics
 	registry   *registry.Registry
-	serializer *resque.JSONSerializer
+	serializer *resque.ResqueSerializer
 }
 
 // NewResqueEngine creates a new Resque-compatible engine
@@ -149,6 +149,6 @@ func (e *ResqueEngine) GetRegistry() *registry.Registry {
 }
 
 // GetSerializer returns the Resque serializer
-func (e *ResqueEngine) GetSerializer() *resque.JSONSerializer {
+func (e *ResqueEngine) GetSerializer() *resque.ResqueSerializer {
 	return e.serializer
 }

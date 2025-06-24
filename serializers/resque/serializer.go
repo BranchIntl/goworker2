@@ -8,20 +8,20 @@ import (
 	"github.com/benmanns/goworker/job"
 )
 
-// JSONSerializer implements the Serializer interface for JSON
-type JSONSerializer struct {
+// ResqueSerializer implements the Serializer interface for Resque format
+type ResqueSerializer struct {
 	useNumber bool
 }
 
-// NewSerializer creates a new JSON serializer
-func NewSerializer() *JSONSerializer {
-	return &JSONSerializer{
+// NewSerializer creates a new Resque serializer
+func NewSerializer() *ResqueSerializer {
+	return &ResqueSerializer{
 		useNumber: false,
 	}
 }
 
 // Serialize converts a job to JSON bytes
-func (s *JSONSerializer) Serialize(j job.Job) ([]byte, error) {
+func (s *ResqueSerializer) Serialize(j job.Job) ([]byte, error) {
 	// For Resque compatibility, we only serialize the payload
 	payload := j.GetPayload()
 
@@ -34,7 +34,7 @@ func (s *JSONSerializer) Serialize(j job.Job) ([]byte, error) {
 }
 
 // Deserialize converts JSON bytes to a job
-func (s *JSONSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Job, error) {
+func (s *ResqueSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Job, error) {
 	var payload job.Payload
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -55,16 +55,16 @@ func (s *JSONSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Jo
 }
 
 // GetFormat returns the serialization format name
-func (s *JSONSerializer) GetFormat() string {
+func (s *ResqueSerializer) GetFormat() string {
 	return "json"
 }
 
 // UseNumber returns whether to use json.Number
-func (s *JSONSerializer) UseNumber() bool {
+func (s *ResqueSerializer) UseNumber() bool {
 	return s.useNumber
 }
 
 // SetUseNumber sets whether to use json.Number
-func (s *JSONSerializer) SetUseNumber(useNumber bool) {
+func (s *ResqueSerializer) SetUseNumber(useNumber bool) {
 	s.useNumber = useNumber
 }

@@ -35,7 +35,7 @@ type SneakersEngine struct {
 	broker     *rabbitmq.RabbitMQBroker
 	stats      core.Statistics
 	registry   *registry.Registry
-	serializer *sneakers.JSONSerializer
+	serializer *sneakers.SneakersSerializer
 }
 
 // NewSneakersEngine creates a new Sneakers-compatible engine
@@ -131,6 +131,6 @@ func (e *SneakersEngine) GetRegistry() *registry.Registry {
 }
 
 // GetSerializer returns the Sneakers serializer
-func (e *SneakersEngine) GetSerializer() *sneakers.JSONSerializer {
+func (e *SneakersEngine) GetSerializer() *sneakers.SneakersSerializer {
 	return e.serializer
 }
