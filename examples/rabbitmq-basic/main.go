@@ -6,11 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/benmanns/goworker/brokers/rabbitmq"
 	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/registry"
-	"github.com/benmanns/goworker/serializers/sneakers"
-	"github.com/benmanns/goworker/statistics/noop"
+	"github.com/benmanns/goworker/engines"
 )
 
 func myFunc(queue string, args ...interface{}) error {
@@ -19,52 +16,36 @@ func myFunc(queue string, args ...interface{}) error {
 }
 
 func main() {
-	// Create RabbitMQ broker with its own options
-	brokerOpts := rabbitmq.DefaultOptions()
-	brokerOpts.URI = "amqp://guest:guest@localhost:5672/"
-	brokerOpts.Exchange = "goworker"
-	brokerOpts.PrefetchCount = 1
-
-	// Create serializer
-	serializer := sneakers.NewSerializer()
-
-	// Create broker
-	broker := rabbitmq.NewBroker(brokerOpts, serializer)
-
-	// Create RabbitMQ statistics with its own options
-	stats := noop.NewStatistics()
-
-	// Create registry
-	reg := registry.NewRegistry()
-
-	// Create engine with engine-specific options
-	engine := core.NewEngine(
-		broker,
-		stats,
-		reg,
-		serializer,
+	// Create a pre-configured Sneakers engine (RabbitMQ + Sneakers serializer + NoOp stats)
+	options := engines.DefaultSneakersOptions()
+	options.RabbitMQURI = "amqp://guest:guest@localhost:5672/"
+	options.EngineOptions = []core.EngineOption{
 		core.WithConcurrency(2),
 		core.WithQueues([]string{"myqueue"}),
-		core.WithPollInterval(5*time.Second),
+		core.WithPollInterval(5 * time.Second),
 		core.WithExitOnComplete(false),
-	)
+	}
+
+	engine := engines.NewSneakersEngine(options)
 
 	// Register job handler
-	reg.Register("MyClass", myFunc)
+	engine.Register("MyClass", myFunc)
 
 	// Start the engine and wait for shutdown signals
-	// This is the simple approach using the convenience Run() method
 	ctx := context.Background()
 	if err := engine.Run(ctx); err != nil {
 		log.Fatal("Error:", err)
 	}
 
-	// Alternative approach for more control:
+	// Alternative: Use MustRun for simpler error handling (panics on error)
+	// engine.MustRun(ctx)
+
+	// For manual control, you can still use the underlying engine:
 	// if err := engine.Start(ctx); err != nil {
 	//     log.Fatal("Error:", err)
 	// }
 	//
-	// // Set up signal handling
+	// // Set up signal handling manually
 	// sigChan := make(chan os.Signal, 1)
 	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	//
