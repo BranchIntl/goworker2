@@ -1,4 +1,4 @@
-package redis
+package resque
 
 import (
 	"context"
@@ -10,23 +10,23 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-// RedisStatistics implements the Statistics interface for Redis
-type RedisStatistics struct {
+// ResqueStatistics implements the Statistics interface for Resque
+type ResqueStatistics struct {
 	pool      *redis.Pool
 	namespace string
 	options   Options
 }
 
-// NewStatistics creates a new Redis statistics backend
-func NewStatistics(options Options) *RedisStatistics {
-	return &RedisStatistics{
+// NewStatistics creates a new Resque statistics backend
+func NewStatistics(options Options) *ResqueStatistics {
+	return &ResqueStatistics{
 		namespace: options.Namespace,
 		options:   options,
 	}
 }
 
 // Connect establishes connection to Redis
-func (r *RedisStatistics) Connect(ctx context.Context) error {
+func (r *ResqueStatistics) Connect(ctx context.Context) error {
 	pool, err := createPool(r.options)
 	if err != nil {
 		return fmt.Errorf("failed to create Redis pool: %w", err)
@@ -46,7 +46,7 @@ func (r *RedisStatistics) Connect(ctx context.Context) error {
 }
 
 // Close closes the Redis connection pool
-func (r *RedisStatistics) Close() error {
+func (r *ResqueStatistics) Close() error {
 	if r.pool != nil {
 		return r.pool.Close()
 	}
@@ -54,7 +54,7 @@ func (r *RedisStatistics) Close() error {
 }
 
 // Health checks the Redis connection health
-func (r *RedisStatistics) Health() error {
+func (r *ResqueStatistics) Health() error {
 	if r.pool == nil {
 		return fmt.Errorf("not connected")
 	}
@@ -70,12 +70,12 @@ func (r *RedisStatistics) Health() error {
 }
 
 // Type returns the statistics backend type
-func (r *RedisStatistics) Type() string {
-	return "redis"
+func (r *ResqueStatistics) Type() string {
+	return "resque"
 }
 
 // RegisterWorker registers a worker in Redis
-func (r *RedisStatistics) RegisterWorker(ctx context.Context, worker interfaces.WorkerInfo) error {
+func (r *ResqueStatistics) RegisterWorker(ctx context.Context, worker interfaces.WorkerInfo) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -114,7 +114,7 @@ func (r *RedisStatistics) RegisterWorker(ctx context.Context, worker interfaces.
 }
 
 // UnregisterWorker removes a worker from Redis
-func (r *RedisStatistics) UnregisterWorker(ctx context.Context, workerID string) error {
+func (r *ResqueStatistics) UnregisterWorker(ctx context.Context, workerID string) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -141,7 +141,7 @@ func (r *RedisStatistics) UnregisterWorker(ctx context.Context, workerID string)
 }
 
 // RecordJobStarted records that a job has started
-func (r *RedisStatistics) RecordJobStarted(ctx context.Context, job interfaces.JobInfo) error {
+func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job interfaces.JobInfo) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -167,7 +167,7 @@ func (r *RedisStatistics) RecordJobStarted(ctx context.Context, job interfaces.J
 }
 
 // RecordJobCompleted records successful job completion
-func (r *RedisStatistics) RecordJobCompleted(ctx context.Context, job interfaces.JobInfo, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job interfaces.JobInfo, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -189,7 +189,7 @@ func (r *RedisStatistics) RecordJobCompleted(ctx context.Context, job interfaces
 }
 
 // RecordJobFailed records job failure
-func (r *RedisStatistics) RecordJobFailed(ctx context.Context, job interfaces.JobInfo, err error, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job interfaces.JobInfo, err error, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -229,7 +229,7 @@ func (r *RedisStatistics) RecordJobFailed(ctx context.Context, job interfaces.Jo
 }
 
 // GetWorkerStats returns statistics for a specific worker
-func (r *RedisStatistics) GetWorkerStats(ctx context.Context, workerID string) (interfaces.WorkerStats, error) {
+func (r *ResqueStatistics) GetWorkerStats(ctx context.Context, workerID string) (interfaces.WorkerStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -264,7 +264,7 @@ func (r *RedisStatistics) GetWorkerStats(ctx context.Context, workerID string) (
 }
 
 // GetQueueStats returns statistics for a specific queue
-func (r *RedisStatistics) GetQueueStats(ctx context.Context, queue string) (interfaces.QueueStats, error) {
+func (r *ResqueStatistics) GetQueueStats(ctx context.Context, queue string) (interfaces.QueueStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -287,7 +287,7 @@ func (r *RedisStatistics) GetQueueStats(ctx context.Context, queue string) (inte
 }
 
 // GetGlobalStats returns global statistics
-func (r *RedisStatistics) GetGlobalStats(ctx context.Context) (interfaces.GlobalStats, error) {
+func (r *ResqueStatistics) GetGlobalStats(ctx context.Context) (interfaces.GlobalStats, error) {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -317,40 +317,40 @@ func (r *RedisStatistics) GetGlobalStats(ctx context.Context) (interfaces.Global
 
 // Helper methods for key generation
 
-func (r *RedisStatistics) workerKey(workerID string) string {
+func (r *ResqueStatistics) workerKey(workerID string) string {
 	return fmt.Sprintf("%sworker:%s", r.namespace, workerID)
 }
 
-func (r *RedisStatistics) workersKey() string {
+func (r *ResqueStatistics) workersKey() string {
 	return fmt.Sprintf("%sworkers", r.namespace)
 }
 
-func (r *RedisStatistics) statProcessedKey(workerID string) string {
+func (r *ResqueStatistics) statProcessedKey(workerID string) string {
 	if workerID == "" {
 		return fmt.Sprintf("%sstat:processed", r.namespace)
 	}
 	return fmt.Sprintf("%sstat:processed:%s", r.namespace, workerID)
 }
 
-func (r *RedisStatistics) statFailedKey(workerID string) string {
+func (r *ResqueStatistics) statFailedKey(workerID string) string {
 	if workerID == "" {
 		return fmt.Sprintf("%sstat:failed", r.namespace)
 	}
 	return fmt.Sprintf("%sstat:failed:%s", r.namespace, workerID)
 }
 
-func (r *RedisStatistics) workerStartedKey(workerID string) string {
+func (r *ResqueStatistics) workerStartedKey(workerID string) string {
 	return fmt.Sprintf("%sworker:%s:started", r.namespace, workerID)
 }
 
-func (r *RedisStatistics) workerJobKey(workerID string) string {
+func (r *ResqueStatistics) workerJobKey(workerID string) string {
 	return fmt.Sprintf("%sworker:%s", r.namespace, workerID)
 }
 
-func (r *RedisStatistics) failedKey() string {
+func (r *ResqueStatistics) failedKey() string {
 	return fmt.Sprintf("%sfailed", r.namespace)
 }
 
-func (r *RedisStatistics) queueKey(queue string) string {
+func (r *ResqueStatistics) queueKey(queue string) string {
 	return fmt.Sprintf("%squeue:%s", r.namespace, queue)
 }

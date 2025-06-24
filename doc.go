@@ -10,7 +10,7 @@
 // - Bring Your Own
 //
 // goworker supports multiple statistics systems like:
-// - Redis (Resque)
+// - Resque
 // - Bring Your Own
 //
 // # Example
@@ -21,7 +21,7 @@
 //		"context"
 //		"github.com/benmanns/goworker/core"
 //		"github.com/benmanns/goworker/brokers/redis"
-//		"github.com/benmanns/goworker/statistics/redis"
+//		resqueStats "github.com/benmanns/goworker/statistics/resque"
 //		"github.com/benmanns/goworker/registry"
 //		"github.com/benmanns/goworker/serializers/json"
 //	)
@@ -29,7 +29,7 @@
 //	func main() {
 //		// Create components
 //		broker := redis.NewBroker(redis.DefaultOptions(), json.NewSerializer())
-//		stats := redisStats.NewStatistics(redisStats.DefaultOptions())
+//		stats := resqueStats.NewStatistics(resqueStats.DefaultOptions())
 //		reg := registry.NewRegistry()
 //
 //		// Create engine

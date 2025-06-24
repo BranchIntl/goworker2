@@ -1,4 +1,4 @@
-package redis
+package resque
 
 import (
 	"crypto/tls"

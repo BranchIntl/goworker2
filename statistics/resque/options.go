@@ -1,8 +1,8 @@
-package redis
+package resque
 
 import "time"
 
-// Options for Redis statistics
+// Options for Resque statistics
 type Options struct {
 	// URI is the Redis connection URI
 	URI string
@@ -34,7 +34,7 @@ type Options struct {
 	TLSCertPath   string
 }
 
-// DefaultOptions returns default Redis statistics options
+// DefaultOptions returns default Resque statistics options
 func DefaultOptions() Options {
 	return Options{
 		URI:            "redis://localhost:6379/",

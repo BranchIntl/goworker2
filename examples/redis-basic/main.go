@@ -10,7 +10,7 @@ import (
 	"github.com/benmanns/goworker/core"
 	"github.com/benmanns/goworker/registry"
 	"github.com/benmanns/goworker/serializers/resque"
-	redisStats "github.com/benmanns/goworker/statistics/redis"
+	resqueStats "github.com/benmanns/goworker/statistics/resque"
 )
 
 func myFunc(queue string, args ...interface{}) error {
@@ -30,11 +30,11 @@ func main() {
 	// Create broker
 	broker := redis.NewBroker(brokerOpts, serializer)
 
-	// Create Redis statistics with its own options
-	statsOpts := redisStats.DefaultOptions()
+	// Create Resque statistics with its own options
+	statsOpts := resqueStats.DefaultOptions()
 	statsOpts.URI = "redis://localhost:6379/"
 	statsOpts.Namespace = "resque:"
-	stats := redisStats.NewStatistics(statsOpts)
+	stats := resqueStats.NewStatistics(statsOpts)
 
 	// Create registry
 	reg := registry.NewRegistry()
