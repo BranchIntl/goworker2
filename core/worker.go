@@ -121,6 +121,10 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	if !ok {
 		err := errors.NewWorkerError(job.GetClass(), job.GetQueue(), errors.ErrWorkerNotFound)
 		w.handleJobError(ctx, job, jobInfo, err, startTime)
+		// Nack the job for unknown worker
+		if err := w.broker.Nack(ctx, job, true); err != nil {
+			w.logger.Errorf("Failed to nack job: %v", err)
+		}
 		return
 	}
 

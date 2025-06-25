@@ -100,6 +100,11 @@ func (r *RabbitMQBroker) Capabilities() core.BrokerCapabilities {
 
 // Enqueue adds a job to the queue
 func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
+	channel, err := r.getChannel()
+	if err != nil {
+		return err
+	}
+
 	// Ensure queue exists
 	if err := r.ensureQueue(j.GetQueue()); err != nil {
 		return errors.NewBrokerError("ensure_queue", j.GetQueue(), err)
@@ -113,7 +118,7 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	}
 
 	// Publish message
-	err = r.channel.PublishWithContext(
+	err = channel.PublishWithContext(
 		ctx,          // context
 		"",           // exchange
 		j.GetQueue(), // routing key (queue name)
@@ -136,13 +141,18 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 
 // Dequeue retrieves a job from the queue
 func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
+	channel, err := r.getChannel()
+	if err != nil {
+		return nil, err
+	}
+
 	// Ensure queue exists
 	if err := r.ensureQueue(queue); err != nil {
 		return nil, errors.NewBrokerError("ensure_queue", queue, err)
 	}
 
 	// Get a single message
-	delivery, ok, err := r.channel.Get(queue, false) // Don't auto-ack
+	delivery, ok, err := channel.Get(queue, false) // Don't auto-ack
 	if err != nil {
 		return nil, errors.NewBrokerError("dequeue", queue, err)
 	}
@@ -175,7 +185,7 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, er
 	rmqJob := &RMQJob{
 		Job:         j,
 		deliveryTag: delivery.DeliveryTag,
-		channel:     r.channel,
+		channel:     channel,
 	}
 
 	return rmqJob, nil
@@ -199,6 +209,11 @@ func (r *RabbitMQBroker) Nack(ctx context.Context, j job.Job, requeue bool) erro
 
 // CreateQueue creates a new queue
 func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
+	channel, err := r.getChannel()
+	if err != nil {
+		return err
+	}
+
 	args := amqp.Table{}
 
 	// Set message TTL if specified
@@ -217,7 +232,7 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options c
 		args["x-max-retries"] = options.MaxRetries
 	}
 
-	_, err := r.channel.QueueDeclare(
+	_, err = channel.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
@@ -236,7 +251,12 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options c
 
 // DeleteQueue deletes a queue
 func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
-	_, err := r.channel.QueueDelete(name, false, false, false)
+	channel, err := r.getChannel()
+	if err != nil {
+		return err
+	}
+
+	_, err = channel.QueueDelete(name, false, false, false)
 	if err != nil {
 		return errors.NewBrokerError("delete_queue", name, err)
 	}
@@ -247,7 +267,12 @@ func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
 
 // QueueExists checks if a queue exists
 func (r *RabbitMQBroker) QueueExists(ctx context.Context, name string) (bool, error) {
-	_, err := r.channel.QueueDeclarePassive(name, true, false, false, false, nil)
+	channel, err := r.getChannel()
+	if err != nil {
+		return false, err
+	}
+
+	_, err = channel.QueueDeclarePassive(name, true, false, false, false, nil)
 	if err != nil {
 		// Queue doesn't exist
 		return false, nil
@@ -257,20 +282,38 @@ func (r *RabbitMQBroker) QueueExists(ctx context.Context, name string) (bool, er
 
 // QueueLength returns the number of jobs in a queue
 func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, error) {
-	state, err := r.channel.QueueInspect(name)
+	channel, err := r.getChannel()
+	if err != nil {
+		return 0, err
+	}
+
+	state, err := channel.QueueInspect(name)
 	if err != nil {
 		return 0, errors.NewBrokerError("queue_length", name, err)
 	}
 	return int64(state.Messages), nil
 }
 
+// getChannel returns the channel if connected, otherwise returns ErrNotConnected
+func (r *RabbitMQBroker) getChannel() (*amqp.Channel, error) {
+	if r.channel == nil {
+		return nil, errors.ErrNotConnected
+	}
+	return r.channel, nil
+}
+
 // ensureQueue makes sure a queue is declared
 func (r *RabbitMQBroker) ensureQueue(name string) error {
+	channel, err := r.getChannel()
+	if err != nil {
+		return err
+	}
+
 	if r.queues[name] {
 		return nil // Already declared
 	}
 
-	_, err := r.channel.QueueDeclare(
+	_, err = channel.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
