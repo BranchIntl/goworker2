@@ -149,7 +149,7 @@ goworker2 uses a modular architecture with dependency injection:
 │   Registry      │  ← Worker function registry
 │   Serializer    │  ← Job serialization format
 │   WorkerPool    │  ← Manages concurrent workers
-│   Poller       │  ← Polls queues for jobs
+│   Poller        │  ← Polls queues for jobs
 └─────────────────┘
 ```
 
