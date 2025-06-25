@@ -1,0 +1,124 @@
+---
+description: 
+globs: **_test.go
+alwaysApply: false
+---
+# Go Testing Guidelines
+
+## Core Principles
+
+### 1. Write Functional Tests
+- Test behavior and edge cases, not implementation details
+- Focus on actual functionality over coverage metrics
+- Test error conditions and boundaries thoroughly
+- No need to test something that go compilation should detect anyway
+
+### 2. Use testify Assertions
+- Use `require.*` for critical failures (stops execution)
+- Use `assert.*` for non-critical assertions (continues testing)
+- Prefer `ErrorAs()` and `ErrorIs()` for error type checking
+
+```go
+require.NoError(t, err)  // Critical - stop if fails
+assert.Equal(t, expected, actual)  // Continue testing
+assert.ErrorAs(t, err, &specificErrorType)  // Check error types
+```
+
+### 3. Simple Mocks
+- Use simple data-holding structs for configuration testing
+- Avoid `testify/mock` for basic data structures
+- Only use `testify/mock` for call verification/complex behavior
+
+```go
+// Good - simple data holder
+type mockOpts struct { uri string; timeout time.Duration }
+func (m mockOpts) GetURI() string { return m.uri }
+
+// Avoid unless you need call verification
+mockOptions.On("GetURI").Return("redis://localhost")
+```
+
+### 4. No External Dependencies
+- Never hit real services (DB, APIs, network) in unit tests
+- Use unreachable hostnames with short timeouts for failure testing
+- Test configuration logic, not actual network communication
+
+```go
+opts.uri = "redis://unreachable-host:6379"
+opts.connectTimeout = 100 * time.Millisecond  // Fail fast
+```
+
+## Test Organization
+
+### Combine Related Tests
+- Use table-driven tests for similar scenarios
+- Group tests that validate the same function with different inputs
+
+```go
+func TestDialRedis(t *testing.T) {
+    tests := []struct {
+        name, uri, expectErr string
+    }{
+        {"invalid URI", ":/invalid", ""},
+        {"unsupported scheme", "http://localhost", "invalid scheme"},
+        {"redis basic", "redis://unreachable:6379", ""},
+    }
+    // Single test loop instead of multiple functions
+}
+```
+
+### Helper Functions
+- Extract common assertion patterns
+- Create factory functions for test data
+
+```go
+func assertConnError(t *testing.T, err error) {
+    require.Error(t, err)
+    var connErr *CustomConnectionError
+    assert.ErrorAs(t, err, &connErr)
+}
+
+func defaultOpts() TestOptions {
+    return TestOptions{uri: "redis://localhost", timeout: 10*time.Second}
+}
+```
+
+## Best Practices
+
+### File Structure
+- Use `*_test.go` suffix
+- Place tests in same package as code
+- Use clear function names: `TestFunctionName_Scenario`
+
+### Error Testing
+- Test both success and failure paths
+- Use specific error type checking with `ErrorAs()`/`ErrorIs()`
+- Use `require.Error()` for expected failures
+
+### Temporary Resources
+- Use `ioutil.TempDir()` for temp files
+- Always cleanup with `defer os.RemoveAll(tmpDir)`
+- Use `require.NoError()` for setup operations
+
+```go
+tmpDir, err := ioutil.TempDir("", "test_prefix")
+require.NoError(t, err)
+defer os.RemoveAll(tmpDir)
+```
+
+### Performance
+- Use short timeouts for network operations
+- Prefer fast, deterministic tests
+- Run tests in parallel with `t.Parallel()` when possible
+- Clean up resources to avoid pollution
+
+## Code Review Checklist
+- [ ] Uses testify assertions vs manual checking
+- [ ] Tests both success and error paths
+- [ ] No external service dependencies
+- [ ] Clear, descriptive test names
+- [ ] Proper `require` vs `assert` usage
+- [ ] Helper functions reduce duplication
+- [ ] Proper resource cleanup
+- [ ] Error types checked with `ErrorAs`/`ErrorIs`
+- [ ] Focuses on behavior, not implementation 
