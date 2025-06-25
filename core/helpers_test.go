@@ -105,15 +105,17 @@ func (b *EngineBuilder) Build() *Engine {
 
 // WorkerBuilder helps create workers for testing
 type WorkerBuilder struct {
-	setup *TestSetup
-	id    string
+	setup  *TestSetup
+	id     string
+	queues []string
 }
 
 // NewWorker starts building a test worker
 func (s *TestSetup) NewWorker() *WorkerBuilder {
 	return &WorkerBuilder{
-		setup: s,
-		id:    "test-worker",
+		setup:  s,
+		id:     "test-worker",
+		queues: []string{"test-queue"},
 	}
 }
 
@@ -123,9 +125,15 @@ func (b *WorkerBuilder) WithID(id string) *WorkerBuilder {
 	return b
 }
 
+// WithQueues sets the worker queues
+func (b *WorkerBuilder) WithQueues(queues []string) *WorkerBuilder {
+	b.queues = queues
+	return b
+}
+
 // Build creates the worker
 func (b *WorkerBuilder) Build() *Worker {
-	return NewWorker(b.id, b.setup.Registry, b.setup.Stats, b.setup.Logger, b.setup.Broker)
+	return NewWorker(b.id, b.queues, b.setup.Registry, b.setup.Stats, b.setup.Logger, b.setup.Broker)
 }
 
 // PollerBuilder helps create pollers for testing
@@ -167,6 +175,7 @@ func (b *PollerBuilder) Build() *Poller {
 type WorkerPoolBuilder struct {
 	setup       *TestSetup
 	concurrency int
+	queues      []string
 	jobChan     <-chan job.Job
 }
 
@@ -175,6 +184,7 @@ func (s *TestSetup) NewWorkerPool(jobChan <-chan job.Job) *WorkerPoolBuilder {
 	return &WorkerPoolBuilder{
 		setup:       s,
 		concurrency: 2,
+		queues:      []string{"test-queue"},
 		jobChan:     jobChan,
 	}
 }
@@ -185,10 +195,16 @@ func (b *WorkerPoolBuilder) WithConcurrency(concurrency int) *WorkerPoolBuilder 
 	return b
 }
 
+// WithQueues sets the worker pool queues
+func (b *WorkerPoolBuilder) WithQueues(queues []string) *WorkerPoolBuilder {
+	b.queues = queues
+	return b
+}
+
 // Build creates the worker pool
 func (b *WorkerPoolBuilder) Build() *WorkerPool {
 	return NewWorkerPool(b.setup.Registry, b.setup.Stats, b.setup.Serializer,
-		b.concurrency, b.jobChan, b.setup.Logger, b.setup.Broker)
+		b.concurrency, b.queues, b.jobChan, b.setup.Logger, b.setup.Broker)
 }
 
 // ErrorTestCase represents a common error test scenario

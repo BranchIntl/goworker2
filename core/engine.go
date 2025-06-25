@@ -91,6 +91,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		e.stats,
 		e.serializer,
 		e.config.Concurrency,
+		e.config.Queues,
 		jobChan,
 		e.logger,
 		e.broker,

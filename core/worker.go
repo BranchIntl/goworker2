@@ -17,6 +17,7 @@ type Worker struct {
 	id       string
 	hostname string
 	pid      int
+	queues   []string
 	registry Registry
 	stats    Statistics
 	logger   seelog.LoggerInterface
@@ -31,6 +32,7 @@ type Worker struct {
 // NewWorker creates a new worker
 func NewWorker(
 	id string,
+	queues []string,
 	registry Registry,
 	stats Statistics,
 	logger seelog.LoggerInterface,
@@ -42,6 +44,7 @@ func NewWorker(
 		id:        id,
 		hostname:  hostname,
 		pid:       os.Getpid(),
+		queues:    queues,
 		registry:  registry,
 		stats:     stats,
 		logger:    logger,
@@ -55,11 +58,11 @@ func (w *Worker) GetID() string {
 	return fmt.Sprintf("%s:%d-%s", w.hostname, w.pid, w.id)
 }
 
-// GetQueues returns the queues this worker processes
+// GetQueues returns the queues this worker processes.
+// Note: This is for informational purposes only (e.g., WorkerInfo reporting).
+// Workers receive jobs via channels from the Poller and don't poll queues directly.
 func (w *Worker) GetQueues() []string {
-	// In this implementation, queues are managed by the poller
-	// Workers process jobs from any queue
-	return []string{}
+	return w.queues
 }
 
 // Work starts processing jobs
