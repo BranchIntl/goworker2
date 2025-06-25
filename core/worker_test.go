@@ -51,7 +51,7 @@ func TestWorker_Work_JobFailure(t *testing.T) {
 
 	// Register a failing worker function
 	testError := errors.New("job failed")
-	registry.Register("FailingJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("FailingJob", func(queue string, args ...interface{}) error {
 		return testError
 	})
 
@@ -110,7 +110,7 @@ func TestWorker_Work_PanicRecovery(t *testing.T) {
 	broker := NewMockBroker()
 
 	// Register a panicking worker function
-	registry.Register("PanicJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("PanicJob", func(queue string, args ...interface{}) error {
 		panic("test panic")
 	})
 
@@ -180,7 +180,7 @@ func TestWorker_Work_StatisticsErrors(t *testing.T) {
 	// Set up statistics to return errors
 	stats.SetConnectError(errors.New("stats error"))
 
-	registry.Register("TestJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("TestJob", func(queue string, args ...interface{}) error {
 		return nil
 	})
 
@@ -213,7 +213,7 @@ func TestWorker_Work_BrokerErrors(t *testing.T) {
 	// Set up broker to return ack/nack errors
 	broker.ackError = errors.New("ack failed")
 
-	registry.Register("TestJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("TestJob", func(queue string, args ...interface{}) error {
 		return nil
 	})
 
@@ -240,7 +240,7 @@ func TestWorker_ProcessMultipleJobs(t *testing.T) {
 	broker := NewMockBroker()
 
 	jobCount := 0
-	registry.Register("CounterJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("CounterJob", func(queue string, args ...interface{}) error {
 		jobCount++
 		return nil
 	})
@@ -277,7 +277,7 @@ func TestWorker_LongRunningJob(t *testing.T) {
 	jobStarted := make(chan bool)
 	jobShouldComplete := make(chan bool)
 
-	registry.Register("LongJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("LongJob", func(queue string, args ...interface{}) error {
 		jobStarted <- true
 		<-jobShouldComplete
 		return nil
@@ -295,7 +295,7 @@ func TestWorker_LongRunningJob(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		worker.Work(ctx, jobChan)
+		_ = worker.Work(ctx, jobChan)
 	}()
 
 	// Wait for job to start

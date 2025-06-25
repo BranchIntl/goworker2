@@ -239,12 +239,12 @@ func containsSubstring(s, substr string) bool {
 
 // RegisterTestWorker is a helper to register common test workers
 func (s *TestSetup) RegisterTestWorker(class string, fn WorkerFunc) {
-	s.Registry.Register(class, fn)
+	_ = s.Registry.Register(class, fn)
 }
 
 // RegisterSimpleWorker registers a worker that just succeeds
 func (s *TestSetup) RegisterSimpleWorker(class string) {
-	s.Registry.Register(class, func(queue string, args ...interface{}) error {
+	_ = s.Registry.Register(class, func(queue string, args ...interface{}) error {
 		return nil
 	})
 }

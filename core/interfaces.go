@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/cihub/seelog"
 )
 
 // WorkerFunc is the function signature for workers
@@ -34,6 +35,9 @@ type Broker interface {
 	// Broker-specific info
 	Type() string
 	Capabilities() BrokerCapabilities
+
+	// Logger injection
+	SetLogger(logger seelog.LoggerInterface)
 }
 
 // Statistics interface defines what core needs from a statistics backend
@@ -43,9 +47,9 @@ type Statistics interface {
 	UnregisterWorker(ctx context.Context, workerID string) error
 
 	// Job metrics
-	RecordJobStarted(ctx context.Context, job JobInfo) error
-	RecordJobCompleted(ctx context.Context, job JobInfo, duration time.Duration) error
-	RecordJobFailed(ctx context.Context, job JobInfo, err error, duration time.Duration) error
+	RecordJobStarted(ctx context.Context, job job.Job, worker WorkerInfo) error
+	RecordJobCompleted(ctx context.Context, job job.Job, worker WorkerInfo, duration time.Duration) error
+	RecordJobFailed(ctx context.Context, job job.Job, worker WorkerInfo, err error, duration time.Duration) error
 
 	// Statistics queries
 	GetWorkerStats(ctx context.Context, workerID string) (WorkerStats, error)
@@ -122,14 +126,6 @@ type WorkerInfo struct {
 	Pid      int
 	Queues   []string
 	Started  time.Time
-}
-
-// JobInfo describes a job for statistics
-type JobInfo struct {
-	ID       string
-	Queue    string
-	Class    string
-	WorkerID string
 }
 
 // WorkerStats contains statistics for a worker

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/job"
 )
 
 // NoOpStatistics implements the Statistics interface with no-op operations
@@ -46,17 +47,17 @@ func (n *NoOpStatistics) UnregisterWorker(ctx context.Context, workerID string) 
 }
 
 // RecordJobStarted records that a job has started (no-op)
-func (n *NoOpStatistics) RecordJobStarted(ctx context.Context, job core.JobInfo) error {
+func (n *NoOpStatistics) RecordJobStarted(ctx context.Context, job job.Job, worker core.WorkerInfo) error {
 	return nil
 }
 
 // RecordJobCompleted records successful job completion (no-op)
-func (n *NoOpStatistics) RecordJobCompleted(ctx context.Context, job core.JobInfo, duration time.Duration) error {
+func (n *NoOpStatistics) RecordJobCompleted(ctx context.Context, job job.Job, worker core.WorkerInfo, duration time.Duration) error {
 	return nil
 }
 
 // RecordJobFailed records job failure (no-op)
-func (n *NoOpStatistics) RecordJobFailed(ctx context.Context, job core.JobInfo, err error, duration time.Duration) error {
+func (n *NoOpStatistics) RecordJobFailed(ctx context.Context, job job.Job, worker core.WorkerInfo, err error, duration time.Duration) error {
 	return nil
 }
 

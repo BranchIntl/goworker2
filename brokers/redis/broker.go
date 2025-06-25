@@ -9,6 +9,7 @@ import (
 	"github.com/BranchIntl/goworker2/errors"
 	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/cihub/seelog"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -18,6 +19,7 @@ type RedisBroker struct {
 	namespace  string
 	options    Options
 	serializer core.Serializer
+	logger     seelog.LoggerInterface
 }
 
 // NewBroker creates a new Redis broker
@@ -81,6 +83,11 @@ func (r *RedisBroker) Type() string {
 	return "redis"
 }
 
+// SetLogger sets the logger for the broker
+func (r *RedisBroker) SetLogger(logger seelog.LoggerInterface) {
+	r.logger = logger
+}
+
 // Capabilities returns Redis broker capabilities
 func (r *RedisBroker) Capabilities() core.BrokerCapabilities {
 	return core.BrokerCapabilities{
@@ -115,7 +122,9 @@ func (r *RedisBroker) Enqueue(ctx context.Context, j job.Job) error {
 	}
 
 	// Add queue to set of known queues (best effort)
-	conn.Do("SADD", r.queuesKey(), j.GetQueue())
+	if _, err := conn.Do("SADD", r.queuesKey(), j.GetQueue()); err != nil {
+		r.logError("Failed to track queue %s: %v", j.GetQueue(), err)
+	}
 
 	return nil
 }
@@ -203,7 +212,9 @@ func (r *RedisBroker) DeleteQueue(ctx context.Context, name string) error {
 	}
 
 	// Remove from set of queues (best effort)
-	conn.Do("SREM", r.queuesKey(), name)
+	if _, err := conn.Do("SREM", r.queuesKey(), name); err != nil {
+		r.logError("Failed to remove queue %s from set: %v", name, err)
+	}
 
 	return nil
 }
@@ -252,4 +263,10 @@ func (r *RedisBroker) queueKey(queue string) string {
 
 func (r *RedisBroker) queuesKey() string {
 	return fmt.Sprintf("%squeues", r.namespace)
+}
+
+func (r *RedisBroker) logError(format string, args ...interface{}) {
+	if r.logger != nil {
+		r.logger.Errorf(format, args...)
+	}
 }

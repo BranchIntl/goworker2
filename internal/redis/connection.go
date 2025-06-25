@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"time"
 
 	goworkerErrors "github.com/BranchIntl/goworker2/errors"
@@ -144,7 +144,7 @@ func LoadCertPool(certPath string) (*x509.CertPool, error) {
 		rootCAs = x509.NewCertPool()
 	}
 
-	certs, err := ioutil.ReadFile(certPath)
+	certs, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cert file %q: %w", certPath, err)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
+	"github.com/BranchIntl/goworker2/job"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -146,17 +147,15 @@ func (r *ResqueStatistics) UnregisterWorker(ctx context.Context, workerID string
 }
 
 // RecordJobStarted records that a job has started
-func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job core.JobInfo) error {
+func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job job.Job, worker core.WorkerInfo) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
 	// Store job info for worker
 	workData := map[string]interface{}{
-		"queue":  job.Queue,
-		"run_at": time.Now().Format(time.RFC3339),
-		"payload": map[string]interface{}{
-			"class": job.Class,
-		},
+		"queue":   job.GetQueue(),
+		"run_at":  time.Now().Format(time.RFC3339),
+		"payload": job.GetPayload(),
 	}
 
 	workJSON, err := json.Marshal(workData)
@@ -164,7 +163,7 @@ func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job core.JobInf
 		return fmt.Errorf("failed to marshal work data: %w", err)
 	}
 
-	if _, err := conn.Do("SET", r.workerJobKey(job.WorkerID), workJSON); err != nil {
+	if _, err := conn.Do("SET", r.workerJobKey(worker.ID), workJSON); err != nil {
 		return fmt.Errorf("failed to set worker job: %w", err)
 	}
 
@@ -172,7 +171,7 @@ func (r *ResqueStatistics) RecordJobStarted(ctx context.Context, job core.JobInf
 }
 
 // RecordJobCompleted records successful job completion
-func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job core.JobInfo, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job job.Job, worker core.WorkerInfo, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
 
@@ -181,12 +180,12 @@ func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job core.JobI
 		return fmt.Errorf("failed to increment global processed: %w", err)
 	}
 
-	if _, err := conn.Do("INCR", r.statProcessedKey(job.WorkerID)); err != nil {
+	if _, err := conn.Do("INCR", r.statProcessedKey(worker.ID)); err != nil {
 		return fmt.Errorf("failed to increment worker processed: %w", err)
 	}
 
 	// Clear worker job
-	if _, err := conn.Do("DEL", r.workerJobKey(job.WorkerID)); err != nil {
+	if _, err := conn.Do("DEL", r.workerJobKey(worker.ID)); err != nil {
 		return fmt.Errorf("failed to clear worker job: %w", err)
 	}
 
@@ -194,21 +193,41 @@ func (r *ResqueStatistics) RecordJobCompleted(ctx context.Context, job core.JobI
 }
 
 // RecordJobFailed records job failure
-func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job core.JobInfo, err error, duration time.Duration) error {
+func (r *ResqueStatistics) RecordJobFailed(ctx context.Context, job job.Job, worker core.WorkerInfo, err error, duration time.Duration) error {
 	conn := r.pool.Get()
 	defer conn.Close()
+
+	// Store failure details with rich worker information
+	failure := map[string]interface{}{
+		"failed_at": time.Now().Format(time.RFC3339),
+		"payload":   job.GetPayload(),
+		"exception": "Error",
+		"error":     err.Error(),
+		"worker":    worker,
+		"queue":     job.GetQueue(),
+	}
+
+	failureJSON, jsonErr := json.Marshal(failure)
+	if jsonErr != nil {
+		return fmt.Errorf("failed to marshal failure data: %w", jsonErr)
+	}
+
+	// Store in failed queue (like original Resque)
+	if _, err := conn.Do("RPUSH", r.failedKey(), failureJSON); err != nil {
+		return fmt.Errorf("failed to store failure: %w", err)
+	}
 
 	// Increment counters
 	if _, err := conn.Do("INCR", r.statFailedKey("")); err != nil {
 		return fmt.Errorf("failed to increment global failed: %w", err)
 	}
 
-	if _, err := conn.Do("INCR", r.statFailedKey(job.WorkerID)); err != nil {
+	if _, err := conn.Do("INCR", r.statFailedKey(worker.ID)); err != nil {
 		return fmt.Errorf("failed to increment worker failed: %w", err)
 	}
 
 	// Clear worker job
-	if _, err := conn.Do("DEL", r.workerJobKey(job.WorkerID)); err != nil {
+	if _, err := conn.Do("DEL", r.workerJobKey(worker.ID)); err != nil {
 		return fmt.Errorf("failed to clear worker job: %w", err)
 	}
 

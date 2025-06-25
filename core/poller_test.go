@@ -113,7 +113,7 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 
 	// Start poller in goroutine
 	go func() {
-		poller.Start(ctx)
+		_ = poller.Start(ctx)
 	}()
 
 	// Should receive all jobs
@@ -273,7 +273,7 @@ func TestPoller_Start_ChannelBlocked(t *testing.T) {
 
 	// Start poller in goroutine
 	go func() {
-		poller.Start(ctx)
+		_ = poller.Start(ctx)
 	}()
 
 	// Fill the channel buffer

@@ -2,12 +2,12 @@ package core
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/cihub/seelog"
 )
 
 // Mock implementations for testing
@@ -201,6 +201,10 @@ func (m *MockBroker) Capabilities() BrokerCapabilities {
 	return m.capabilities
 }
 
+func (m *MockBroker) SetLogger(logger seelog.LoggerInterface) {
+	// Mock implementation - just ignore the logger
+}
+
 // Test helpers
 func (m *MockBroker) SetConnectError(err error) {
 	m.mu.Lock()
@@ -255,6 +259,14 @@ func (m *MockBroker) AddJobToQueue(queue string, jobArg job.Job) {
 	m.queueLengths[queue]++
 }
 
+// MockJobCall represents a job call for testing
+type MockJobCall struct {
+	JobID    string
+	Queue    string
+	Class    string
+	WorkerID string
+}
+
 // MockStatistics implements the Statistics interface for testing
 type MockStatistics struct {
 	mu              sync.RWMutex
@@ -265,17 +277,17 @@ type MockStatistics struct {
 	unregisterError error
 	recordError     error
 	workers         map[string]WorkerInfo
-	jobsStarted     []JobInfo
-	jobsCompleted   []JobInfo
-	jobsFailed      []JobInfo
+	jobsStarted     []MockJobCall
+	jobsCompleted   []MockJobCall
+	jobsFailed      []MockJobCall
 }
 
 func NewMockStatistics() *MockStatistics {
 	return &MockStatistics{
 		workers:       make(map[string]WorkerInfo),
-		jobsStarted:   make([]JobInfo, 0),
-		jobsCompleted: make([]JobInfo, 0),
-		jobsFailed:    make([]JobInfo, 0),
+		jobsStarted:   make([]MockJobCall, 0),
+		jobsCompleted: make([]MockJobCall, 0),
+		jobsFailed:    make([]MockJobCall, 0),
 	}
 }
 
@@ -303,7 +315,7 @@ func (m *MockStatistics) UnregisterWorker(ctx context.Context, workerID string) 
 	return nil
 }
 
-func (m *MockStatistics) RecordJobStarted(ctx context.Context, job JobInfo) error {
+func (m *MockStatistics) RecordJobStarted(ctx context.Context, job job.Job, worker WorkerInfo) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -311,11 +323,17 @@ func (m *MockStatistics) RecordJobStarted(ctx context.Context, job JobInfo) erro
 		return m.recordError
 	}
 
-	m.jobsStarted = append(m.jobsStarted, job)
+	call := MockJobCall{
+		JobID:    job.GetID(),
+		Queue:    job.GetQueue(),
+		Class:    job.GetClass(),
+		WorkerID: worker.ID,
+	}
+	m.jobsStarted = append(m.jobsStarted, call)
 	return nil
 }
 
-func (m *MockStatistics) RecordJobCompleted(ctx context.Context, job JobInfo, duration time.Duration) error {
+func (m *MockStatistics) RecordJobCompleted(ctx context.Context, job job.Job, worker WorkerInfo, duration time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -323,11 +341,17 @@ func (m *MockStatistics) RecordJobCompleted(ctx context.Context, job JobInfo, du
 		return m.recordError
 	}
 
-	m.jobsCompleted = append(m.jobsCompleted, job)
+	call := MockJobCall{
+		JobID:    job.GetID(),
+		Queue:    job.GetQueue(),
+		Class:    job.GetClass(),
+		WorkerID: worker.ID,
+	}
+	m.jobsCompleted = append(m.jobsCompleted, call)
 	return nil
 }
 
-func (m *MockStatistics) RecordJobFailed(ctx context.Context, job JobInfo, err error, duration time.Duration) error {
+func (m *MockStatistics) RecordJobFailed(ctx context.Context, job job.Job, worker WorkerInfo, err error, duration time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -335,7 +359,13 @@ func (m *MockStatistics) RecordJobFailed(ctx context.Context, job JobInfo, err e
 		return m.recordError
 	}
 
-	m.jobsFailed = append(m.jobsFailed, job)
+	call := MockJobCall{
+		JobID:    job.GetID(),
+		Queue:    job.GetQueue(),
+		Class:    job.GetClass(),
+		WorkerID: worker.ID,
+	}
+	m.jobsFailed = append(m.jobsFailed, call)
 	return nil
 }
 
@@ -403,16 +433,16 @@ func (m *MockStatistics) SetHealthError(err error) {
 	m.healthError = err
 }
 
-func (m *MockStatistics) GetJobsStarted() []JobInfo {
+func (m *MockStatistics) GetJobsStarted() []MockJobCall {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]JobInfo(nil), m.jobsStarted...)
+	return append([]MockJobCall(nil), m.jobsStarted...)
 }
 
-func (m *MockStatistics) GetJobsCompleted() []JobInfo {
+func (m *MockStatistics) GetJobsCompleted() []MockJobCall {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]JobInfo(nil), m.jobsCompleted...)
+	return append([]MockJobCall(nil), m.jobsCompleted...)
 }
 
 // MockRegistry implements the Registry interface for testing
@@ -590,18 +620,4 @@ func (m *MockJob) GetPayload() job.Payload {
 		Class: m.class,
 		Args:  m.args,
 	}
-}
-
-// Test helper functions
-
-func testWorkerFunc(queue string, args ...interface{}) error {
-	return nil
-}
-
-func failingWorkerFunc(queue string, args ...interface{}) error {
-	return errors.New("worker function failed")
-}
-
-func panicWorkerFunc(queue string, args ...interface{}) error {
-	panic("worker function panicked")
 }

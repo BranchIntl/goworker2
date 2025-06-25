@@ -8,6 +8,7 @@ import (
 	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/cihub/seelog"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -18,6 +19,7 @@ type RabbitMQBroker struct {
 	options    Options
 	serializer core.Serializer
 	queues     map[string]bool // Track declared queues
+	logger     seelog.LoggerInterface
 }
 
 // NewBroker creates a new RabbitMQ broker
@@ -86,6 +88,11 @@ func (r *RabbitMQBroker) Health() error {
 // Type returns the broker type
 func (r *RabbitMQBroker) Type() string {
 	return "rabbitmq"
+}
+
+// SetLogger sets the logger for the broker
+func (r *RabbitMQBroker) SetLogger(logger seelog.LoggerInterface) {
+	r.logger = logger
 }
 
 // Capabilities returns RabbitMQ broker capabilities
@@ -175,7 +182,9 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, er
 	j, err := r.serializer.Deserialize(delivery.Body, metadata)
 	if err != nil {
 		// Reject message if we can't deserialize it
-		delivery.Nack(false, false)
+		if nackErr := delivery.Nack(false, false); nackErr != nil {
+			r.logError("Failed to nack message after deserialization error: %v", nackErr)
+		}
 		return nil, errors.NewSerializationError(r.serializer.GetFormat(),
 			fmt.Errorf("deserialize job: %w", err))
 	}
@@ -287,11 +296,11 @@ func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, e
 		return 0, err
 	}
 
-	state, err := channel.QueueInspect(name)
+	queue, err := channel.QueueDeclarePassive(name, true, false, false, false, nil)
 	if err != nil {
 		return 0, errors.NewBrokerError("queue_length", name, err)
 	}
-	return int64(state.Messages), nil
+	return int64(queue.Messages), nil
 }
 
 // getChannel returns the channel if connected, otherwise returns ErrNotConnected
@@ -328,6 +337,13 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 
 	r.queues[name] = true
 	return nil
+}
+
+// logError logs an error message if logger is available
+func (r *RabbitMQBroker) logError(format string, args ...interface{}) {
+	if r.logger != nil {
+		r.logger.Errorf(format, args...)
+	}
 }
 
 // RMQJob wraps a job with RabbitMQ-specific delivery information

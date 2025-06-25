@@ -1,0 +1,11 @@
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (*github.com/cihub/seelog.LoggerInterface).Errorf
+      - (*github.com/cihub/seelog.LoggerInterface).Error
+      - (*github.com/cihub/seelog.LoggerInterface).Infof
+      - (*github.com/cihub/seelog.LoggerInterface).Info
+      - (*github.com/cihub/seelog.LoggerInterface).Debugf
+      - (*github.com/cihub/seelog.LoggerInterface).Debug
+      - (*github.com/cihub/seelog.LoggerInterface).Warnf
+      - (*github.com/cihub/seelog.LoggerInterface).Warn 

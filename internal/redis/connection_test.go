@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -133,7 +132,7 @@ func TestDialRedis(t *testing.T) {
 
 // Combine all cert tests
 func TestLoadCertPool(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "cert_test")
+	tmpDir, err := os.MkdirTemp("", "cert_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -152,7 +151,7 @@ func TestLoadCertPool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create the file for all test cases except the "file not found" case
 			if tt.name != "file not found" {
-				err := ioutil.WriteFile(tt.path, []byte(tt.content), 0644)
+				err := os.WriteFile(tt.path, []byte(tt.content), 0644)
 				require.NoError(t, err)
 			}
 
@@ -164,7 +163,7 @@ func TestLoadCertPool(t *testing.T) {
 }
 
 func TestDialRedis_WithCerts(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "cert_test")
+	tmpDir, err := os.MkdirTemp("", "cert_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -181,7 +180,7 @@ func TestDialRedis_WithCerts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.content != "" {
-				err := ioutil.WriteFile(tt.path, []byte(tt.content), 0644)
+				err := os.WriteFile(tt.path, []byte(tt.content), 0644)
 				require.NoError(t, err)
 			}
 

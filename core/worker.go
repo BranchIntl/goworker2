@@ -104,15 +104,16 @@ func (w *Worker) Work(ctx context.Context, jobs <-chan job.Job) error {
 // processJob handles a single job
 func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	startTime := time.Now()
-	jobInfo := JobInfo{
-		ID:       job.GetID(),
-		Queue:    job.GetQueue(),
-		Class:    job.GetClass(),
-		WorkerID: w.GetID(),
+	workerInfo := WorkerInfo{
+		ID:       w.GetID(),
+		Hostname: w.hostname,
+		Pid:      w.pid,
+		Queues:   w.GetQueues(),
+		Started:  w.startTime,
 	}
 
 	// Record job started
-	if err := w.stats.RecordJobStarted(ctx, jobInfo); err != nil {
+	if err := w.stats.RecordJobStarted(ctx, job, workerInfo); err != nil {
 		w.logger.Errorf("Failed to record job start: %v", err)
 	}
 
@@ -120,7 +121,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	workerFunc, ok := w.registry.Get(job.GetClass())
 	if !ok {
 		err := errors.NewWorkerError(job.GetClass(), job.GetQueue(), errors.ErrWorkerNotFound)
-		w.handleJobError(ctx, job, jobInfo, err, startTime)
+		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job for unknown worker
 		if err := w.broker.Nack(ctx, job, true); err != nil {
 			w.logger.Errorf("Failed to nack job: %v", err)
@@ -132,13 +133,13 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	err := w.executeJob(workerFunc, job)
 
 	if err != nil {
-		w.handleJobError(ctx, job, jobInfo, err, startTime)
+		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job on error
 		if err := w.broker.Nack(ctx, job, true); err != nil {
 			w.logger.Errorf("Failed to nack job: %v", err)
 		}
 	} else {
-		w.handleJobSuccess(ctx, jobInfo, startTime)
+		w.handleJobSuccess(ctx, job, workerInfo, startTime)
 		// Ack the job on success
 		if err := w.broker.Ack(ctx, job); err != nil {
 			w.logger.Errorf("Failed to ack job: %v", err)
@@ -163,29 +164,29 @@ func (w *Worker) executeJob(workerFunc WorkerFunc, job job.Job) (err error) {
 }
 
 // handleJobSuccess records successful job completion
-func (w *Worker) handleJobSuccess(ctx context.Context, jobInfo JobInfo, startTime time.Time) {
+func (w *Worker) handleJobSuccess(ctx context.Context, job job.Job, worker WorkerInfo, startTime time.Time) {
 	duration := time.Since(startTime)
 
 	atomic.AddInt64(&w.processed, 1)
 
-	if err := w.stats.RecordJobCompleted(ctx, jobInfo, duration); err != nil {
+	if err := w.stats.RecordJobCompleted(ctx, job, worker, duration); err != nil {
 		w.logger.Errorf("Failed to record job completion: %v", err)
 	}
 
-	w.logger.Debugf("Job %s completed in %v", jobInfo.Class, duration)
+	w.logger.Debugf("Job %s completed in %v", job.GetClass(), duration)
 }
 
 // handleJobError records job failure
-func (w *Worker) handleJobError(ctx context.Context, job job.Job, jobInfo JobInfo, err error, startTime time.Time) {
+func (w *Worker) handleJobError(ctx context.Context, job job.Job, worker WorkerInfo, err error, startTime time.Time) {
 	duration := time.Since(startTime)
 
 	atomic.AddInt64(&w.failed, 1)
 
-	if err := w.stats.RecordJobFailed(ctx, jobInfo, err, duration); err != nil {
+	if err := w.stats.RecordJobFailed(ctx, job, worker, err, duration); err != nil {
 		w.logger.Errorf("Failed to record job failure: %v", err)
 	}
 
-	w.logger.Errorf("Job %s failed: %v", jobInfo.Class, err)
+	w.logger.Errorf("Job %s failed: %v", job.GetClass(), err)
 }
 
 // GetStats returns current worker statistics

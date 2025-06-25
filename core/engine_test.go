@@ -92,7 +92,7 @@ func TestEngine_Health_Healthy(t *testing.T) {
 	ctx := context.Background()
 	err := engine.Start(ctx)
 	require.NoError(t, err)
-	defer engine.Stop()
+	defer func() { _ = engine.Stop() }()
 
 	health := engine.Health()
 
@@ -120,7 +120,7 @@ func TestEngine_Health_Unhealthy(t *testing.T) {
 	ctx := context.Background()
 	err := engine.Start(ctx)
 	require.NoError(t, err)
-	defer engine.Stop()
+	defer func() { _ = engine.Stop() }()
 
 	health := engine.Health()
 
@@ -140,7 +140,7 @@ func TestEngine_Enqueue(t *testing.T) {
 	ctx := context.Background()
 	err := engine.Start(ctx)
 	require.NoError(t, err)
-	defer engine.Stop()
+	defer func() { _ = engine.Stop() }()
 
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{"arg1"})
 	err = engine.Enqueue(testJob)
@@ -403,7 +403,7 @@ func TestEngine_Health_QueueLengths(t *testing.T) {
 	ctx := context.Background()
 	err := engine.Start(ctx)
 	require.NoError(t, err)
-	defer engine.Stop()
+	defer func() { _ = engine.Stop() }()
 
 	health := engine.Health()
 

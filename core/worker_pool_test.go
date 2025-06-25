@@ -39,7 +39,7 @@ func TestWorkerPool_Start_JobProcessing(t *testing.T) {
 
 	// Register a test worker function
 	jobsProcessed := make(chan string, 10)
-	registry.Register("TestJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("TestJob", func(queue string, args ...interface{}) error {
 		jobsProcessed <- queue + ":" + args[0].(string)
 		return nil
 	})
@@ -90,7 +90,7 @@ func TestWorkerPool_Start_ConcurrentJobProcessing(t *testing.T) {
 	activeCount := 0
 	maxActiveCount := 0
 
-	registry.Register("SlowJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("SlowJob", func(queue string, args ...interface{}) error {
 		mu.Lock()
 		activeCount++
 		if activeCount > maxActiveCount {
@@ -146,7 +146,7 @@ func TestWorkerPool_Start_ContextCancellation(t *testing.T) {
 
 	// Register a long-running worker function
 	jobStarted := make(chan bool, 2)
-	registry.Register("LongJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("LongJob", func(queue string, args ...interface{}) error {
 		jobStarted <- true
 		time.Sleep(time.Second) // Long running
 		return nil
@@ -205,7 +205,7 @@ func TestWorkerPool_ActiveWorkers(t *testing.T) {
 	workerStarted := make(chan bool, concurrency)
 	workerCanContinue := make(chan bool, concurrency)
 
-	registry.Register("TestJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("TestJob", func(queue string, args ...interface{}) error {
 		workerStarted <- true
 		<-workerCanContinue
 		return nil
@@ -222,7 +222,7 @@ func TestWorkerPool_ActiveWorkers(t *testing.T) {
 
 	// Start pool in goroutine
 	go func() {
-		pool.Start(ctx)
+		_ = pool.Start(ctx)
 	}()
 
 	// Wait for all workers to start
@@ -306,11 +306,11 @@ func TestWorkerPool_Start_MultipleJobTypes(t *testing.T) {
 
 	// Register multiple job types
 	results := make(chan string, 10)
-	registry.Register("JobA", func(queue string, args ...interface{}) error {
+	_ = registry.Register("JobA", func(queue string, args ...interface{}) error {
 		results <- "A:" + args[0].(string)
 		return nil
 	})
-	registry.Register("JobB", func(queue string, args ...interface{}) error {
+	_ = registry.Register("JobB", func(queue string, args ...interface{}) error {
 		results <- "B:" + args[0].(string)
 		return nil
 	})
@@ -363,7 +363,7 @@ func TestWorkerPool_Start_LongRunningJobs(t *testing.T) {
 	jobsStarted := make(chan bool, 10)
 	jobsCompleted := make(chan bool, 10)
 
-	registry.Register("LongJob", func(queue string, args ...interface{}) error {
+	_ = registry.Register("LongJob", func(queue string, args ...interface{}) error {
 		jobsStarted <- true
 		time.Sleep(200 * time.Millisecond)
 		jobsCompleted <- true
