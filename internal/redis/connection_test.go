@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	goworkerErrors "github.com/benmanns/goworker/errors"
+	goworkerErrors "github.com/BranchIntl/goworker2/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

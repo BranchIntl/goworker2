@@ -1,6 +1,10 @@
 The MIT License (MIT)
 
-Copyright (c) 2013 Benjamin Manns
+Original goworker Copyright (c) 2013 Benjamin Manns
+goworker2 Copyright (c) 2024 BranchIntl
+
+This project is a complete rewrite and modernization of the original goworker
+library by Benjamin Manns (https://github.com/benmanns/goworker).
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

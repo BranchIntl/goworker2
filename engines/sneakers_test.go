@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benmanns/goworker/brokers/rabbitmq"
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/statistics/noop"
-	"github.com/benmanns/goworker/statistics/resque"
+	"github.com/BranchIntl/goworker2/brokers/rabbitmq"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/statistics/noop"
+	"github.com/BranchIntl/goworker2/statistics/resque"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

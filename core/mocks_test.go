@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/job"
 )
 
 // Mock implementations for testing

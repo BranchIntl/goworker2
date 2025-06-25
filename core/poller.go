@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/job"
 	"github.com/cihub/seelog"
 )
 

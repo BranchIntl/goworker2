@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/errors"
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/errors"
+	"github.com/BranchIntl/goworker2/job"
 )
 
 // MemoryBroker implements the Broker interface using in-memory storage

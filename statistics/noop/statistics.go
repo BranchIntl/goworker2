@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/benmanns/goworker/core"
+	"github.com/BranchIntl/goworker2/core"
 )
 
 // NoOpStatistics implements the Statistics interface with no-op operations

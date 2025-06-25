@@ -3,8 +3,8 @@ package registry
 import (
 	"testing"
 
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/errors"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

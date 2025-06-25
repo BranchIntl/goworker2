@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	goworkerErrors "github.com/benmanns/goworker/errors"
+	goworkerErrors "github.com/BranchIntl/goworker2/errors"
 	"github.com/gomodule/redigo/redis"
 )
 

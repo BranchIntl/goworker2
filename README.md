@@ -1,11 +1,13 @@
-# goworker
+# goworker2
 
-![Build](https://github.com/benmanns/goworker/workflows/Go/badge.svg)
-[![GoDoc](https://godoc.org/github.com/benmanns/goworker?status.svg)](https://godoc.org/github.com/benmanns/goworker)
+![Build](https://github.com/BranchIntl/goworker2/workflows/Go/badge.svg)
+[![GoDoc](https://godoc.org/github.com/BranchIntl/goworker2?status.svg)](https://godoc.org/github.com/BranchIntl/goworker2)
 
-goworker is a Go-based background job processing library with pluggable components. It provides a clean, modular architecture supporting multiple queue backends, serializers, and statistics providers.
+goworker2 is a Go-based background job processing library with pluggable components. It provides a clean, modular architecture supporting multiple queue backends, serializers, and statistics providers.
 
-Originally inspired by Resque-compatible job processing, goworker has evolved into a flexible framework that can work with Redis, RabbitMQ, in-memory queues, and custom backends.
+Originally inspired by Resque-compatible job processing, goworker2 has evolved into a flexible framework that can work with Redis, RabbitMQ, in-memory queues, and custom backends.
+
+**Note**: This is a complete rewrite and modernization of the original [goworker](https://github.com/benmanns/goworker) library by Benjamin Manns, designed as a new project rather than a backwards-compatible upgrade. We're grateful for the inspiration and foundation provided by the original work.
 
 ## Features
 
@@ -31,7 +33,7 @@ import (
 	"context"
 	"log"
 	
-	"github.com/benmanns/goworker/engines"
+	"github.com/BranchIntl/goworker2/engines"
 )
 
 func emailJob(queue string, args ...interface{}) error {
@@ -57,7 +59,7 @@ import (
 	"context"
 	"log"
 	
-	"github.com/benmanns/goworker/engines"
+	"github.com/BranchIntl/goworker2/engines"
 )
 
 func imageProcessor(queue string, args ...interface{}) error {
@@ -87,11 +89,11 @@ import (
 	"log"
 	"time"
 	
-	"github.com/benmanns/goworker/brokers/redis"
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/registry"
-	"github.com/benmanns/goworker/serializers/resque"
-	"github.com/benmanns/goworker/statistics/resque"
+	"github.com/BranchIntl/goworker2/brokers/redis"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/registry"
+	"github.com/BranchIntl/goworker2/serializers/resque"
+	"github.com/BranchIntl/goworker2/statistics/resque"
 )
 
 func main() {
@@ -127,12 +129,16 @@ func main() {
 ## Installation
 
 ```bash
-go get github.com/benmanns/goworker
+go get github.com/BranchIntl/goworker2
 ```
+
+## Acknowledgments
+
+This project was inspired by and builds upon the concepts from the original [goworker](https://github.com/benmanns/goworker) library by Benjamin Manns. While this is a complete rewrite with different architecture and capabilities, we acknowledge and appreciate the foundational work that made this project possible.
 
 ## Architecture
 
-goworker uses a modular architecture with dependency injection:
+goworker2 uses a modular architecture with dependency injection:
 
 ```
 ┌─────────────────┐
@@ -251,7 +257,7 @@ engine.Stop()
 Use the memory broker for testing:
 
 ```go
-import "github.com/benmanns/goworker/brokers/memory"
+import "github.com/BranchIntl/goworker2/brokers/memory"
 
 func TestWorker(t *testing.T) {
 	broker := memory.NewBroker(memory.DefaultOptions())

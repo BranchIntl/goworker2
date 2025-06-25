@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benmanns/goworker/brokers/redis"
-	"github.com/benmanns/goworker/core"
+	"github.com/BranchIntl/goworker2/brokers/redis"
+	"github.com/BranchIntl/goworker2/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

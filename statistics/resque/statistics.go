@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/errors"
-	redisUtils "github.com/benmanns/goworker/internal/redis"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/errors"
+	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
 	"github.com/gomodule/redigo/redis"
 )
 

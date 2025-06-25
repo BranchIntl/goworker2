@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/engines"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/engines"
 )
 
 func myFunc(queue string, args ...interface{}) error {

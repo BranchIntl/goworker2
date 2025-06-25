@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/job"
 )
 
 // WorkerFunc is the function signature for workers

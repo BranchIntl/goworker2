@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/benmanns/goworker/errors"
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/errors"
+	"github.com/BranchIntl/goworker2/job"
 )
 
 // SneakersSerializer implements the Serializer interface for Sneakers format

@@ -1,4 +1,4 @@
-module github.com/benmanns/goworker
+module github.com/BranchIntl/goworker2
 
 go 1.14
 

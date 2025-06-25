@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/benmanns/goworker/brokers/rabbitmq"
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/registry"
-	"github.com/benmanns/goworker/serializers/sneakers"
-	"github.com/benmanns/goworker/statistics/resque"
+	"github.com/BranchIntl/goworker2/brokers/rabbitmq"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/registry"
+	"github.com/BranchIntl/goworker2/serializers/sneakers"
+	"github.com/BranchIntl/goworker2/statistics/resque"
 )
 
 func myFunc(queue string, args ...interface{}) error {

@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/benmanns/goworker/errors"
-	"github.com/benmanns/goworker/job"
+	"github.com/BranchIntl/goworker2/errors"
+	"github.com/BranchIntl/goworker2/job"
 	"github.com/cihub/seelog"
 )
 

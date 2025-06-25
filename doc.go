@@ -1,7 +1,7 @@
-// Package goworker provides a Go-based background job processing library
+// Package goworker2 provides a Go-based background job processing library
 // with pluggable components and modular architecture.
 //
-// Originally inspired by Resque-compatible job processing, goworker has evolved
+// Originally inspired by Resque-compatible job processing, goworker2 has evolved
 // into a flexible framework supporting multiple queue backends (Redis, RabbitMQ,
 // in-memory), serializers (JSON, Resque, Sneakers/ActiveJob), and statistics
 // providers.
@@ -19,7 +19,7 @@
 //
 // For Resque compatibility with Redis:
 //
-//	import "github.com/benmanns/goworker/engines"
+//	import "github.com/BranchIntl/goworker2/engines"
 //
 //	func emailJob(queue string, args ...interface{}) error {
 //		// Process email job
@@ -34,7 +34,7 @@
 //
 // For ActiveJob compatibility with RabbitMQ:
 //
-//	import "github.com/benmanns/goworker/engines"
+//	import "github.com/BranchIntl/goworker2/engines"
 //
 //	func imageProcessor(queue string, args ...interface{}) error {
 //		// Process image
@@ -53,11 +53,11 @@
 //
 //	import (
 //		"context"
-//		"github.com/benmanns/goworker/brokers/redis"
-//		"github.com/benmanns/goworker/core"
-//		"github.com/benmanns/goworker/registry"
-//		"github.com/benmanns/goworker/serializers/resque"
-//		"github.com/benmanns/goworker/statistics/resque"
+//		"github.com/BranchIntl/goworker2/brokers/redis"
+//		"github.com/BranchIntl/goworker2/core"
+//		"github.com/BranchIntl/goworker2/registry"
+//		"github.com/BranchIntl/goworker2/serializers/resque"
+//		"github.com/BranchIntl/goworker2/statistics/resque"
 //	)
 //
 //	func main() {
@@ -114,7 +114,7 @@
 //
 // Use the memory broker for testing without external dependencies:
 //
-//	import "github.com/benmanns/goworker/brokers/memory"
+//	import "github.com/BranchIntl/goworker2/brokers/memory"
 //
 //	func TestWorker(t *testing.T) {
 //		broker := memory.NewBroker(memory.DefaultOptions())
@@ -140,4 +140,4 @@
 //			fmt.Printf("Queue %s: %d jobs\n", queue, count)
 //		}
 //	}
-package goworker
+package goworker2

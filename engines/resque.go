@@ -24,11 +24,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/benmanns/goworker/brokers/redis"
-	"github.com/benmanns/goworker/core"
-	"github.com/benmanns/goworker/registry"
-	"github.com/benmanns/goworker/serializers/resque"
-	resqueStats "github.com/benmanns/goworker/statistics/resque"
+	"github.com/BranchIntl/goworker2/brokers/redis"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/registry"
+	"github.com/BranchIntl/goworker2/serializers/resque"
+	resqueStats "github.com/BranchIntl/goworker2/statistics/resque"
 )
 
 // ResqueOptions holds configuration for the Resque-compatible engine
