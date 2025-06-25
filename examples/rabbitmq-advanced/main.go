@@ -105,37 +105,34 @@ func main() {
 	fmt.Println("Worker started. Press Ctrl+C to stop, SIGUSR1 for health, SIGUSR2 for queue stats.")
 
 	// Wait for shutdown signal
-	for {
-		select {
-		case sig := <-sigChan:
-			switch sig {
-			case syscall.SIGUSR1:
-				// Print health status
-				health := engine.Health()
-				fmt.Printf("\n=== Health Status ===\n")
-				fmt.Printf("Healthy: %v\n", health.Healthy)
-				fmt.Printf("Active Workers: %d\n", health.ActiveWorkers)
-				if health.BrokerHealth != nil {
-					fmt.Printf("Broker Error: %v\n", health.BrokerHealth)
-				}
-				if health.StatsHealth != nil {
-					fmt.Printf("Stats Error: %v\n", health.StatsHealth)
-				}
-				fmt.Printf("=====================\n\n")
-
-			case syscall.SIGUSR2:
-				// Print queue statistics
-				fmt.Printf("\n=== Queue Statistics ===\n")
-				health := engine.Health()
-				for queue, count := range health.QueuedJobs {
-					fmt.Printf("Queue %s: %d jobs\n", queue, count)
-				}
-				fmt.Printf("========================\n\n")
-
-			default:
-				fmt.Printf("Received signal %v, shutting down...\n", sig)
-				goto shutdown
+	for sig := range sigChan {
+		switch sig {
+		case syscall.SIGUSR1:
+			// Print health status
+			health := engine.Health()
+			fmt.Printf("\n=== Health Status ===\n")
+			fmt.Printf("Healthy: %v\n", health.Healthy)
+			fmt.Printf("Active Workers: %d\n", health.ActiveWorkers)
+			if health.BrokerHealth != nil {
+				fmt.Printf("Broker Error: %v\n", health.BrokerHealth)
 			}
+			if health.StatsHealth != nil {
+				fmt.Printf("Stats Error: %v\n", health.StatsHealth)
+			}
+			fmt.Printf("=====================\n\n")
+
+		case syscall.SIGUSR2:
+			// Print queue statistics
+			fmt.Printf("\n=== Queue Statistics ===\n")
+			health := engine.Health()
+			for queue, count := range health.QueuedJobs {
+				fmt.Printf("Queue %s: %d jobs\n", queue, count)
+			}
+			fmt.Printf("========================\n\n")
+
+		default:
+			fmt.Printf("Received signal %v, shutting down...\n", sig)
+			goto shutdown
 		}
 	}
 

@@ -83,22 +83,19 @@ func main() {
 	fmt.Println("Worker started. Press Ctrl+C to stop.")
 
 	// Wait for shutdown signal
-	for {
-		select {
-		case sig := <-sigChan:
-			switch sig {
-			case syscall.SIGUSR1:
-				// Custom behavior for SIGUSR1 - print health status
-				health := engine.Health()
-				fmt.Printf("Health Status: Healthy=%v, Active Workers=%d\n",
-					health.Healthy, health.ActiveWorkers)
-				for queue, count := range health.QueuedJobs {
-					fmt.Printf("  Queue %s: %d jobs\n", queue, count)
-				}
-			default:
-				fmt.Printf("Received signal %v, shutting down...\n", sig)
-				goto shutdown
+	for sig := range sigChan {
+		switch sig {
+		case syscall.SIGUSR1:
+			// Custom behavior for SIGUSR1 - print health status
+			health := engine.Health()
+			fmt.Printf("Health Status: Healthy=%v, Active Workers=%d\n",
+				health.Healthy, health.ActiveWorkers)
+			for queue, count := range health.QueuedJobs {
+				fmt.Printf("  Queue %s: %d jobs\n", queue, count)
 			}
+		default:
+			fmt.Printf("Received signal %v, shutting down...\n", sig)
+			goto shutdown
 		}
 	}
 
