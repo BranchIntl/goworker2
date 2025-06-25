@@ -5,13 +5,13 @@
 
 goworker2 is a Go-based background job processing library with pluggable components. It provides a clean, modular architecture supporting multiple queue backends, serializers, and statistics providers.
 
-Originally inspired by Resque-compatible job processing, goworker2 has evolved into a flexible framework that can work with Redis, RabbitMQ, in-memory queues, and custom backends.
+Originally inspired by Resque-compatible job processing, goworker2 has evolved into a flexible framework that can work with Redis, RabbitMQ, and custom backends.
 
 **Note**: This is a complete rewrite and modernization of the original [goworker](https://github.com/benmanns/goworker) library by Benjamin Manns, designed as a new project rather than a backwards-compatible upgrade. We're grateful for the inspiration and foundation provided by the original work.
 
 ## Features
 
-- **Multiple Queue Backends**: Redis, RabbitMQ, in-memory, or bring your own
+- **Multiple Queue Backends**: Redis, RabbitMQ, or bring your own
 - **Pluggable Serializers**: JSON, Resque, Sneakers/ActiveJob, or custom formats  
 - **Statistics Providers**: Resque-compatible, NoOp, or custom monitoring
 - **Pre-configured Engines**: Ready-to-use setups for common scenarios
@@ -144,7 +144,7 @@ goworker2 uses a modular architecture with dependency injection:
 ┌─────────────────┐
 │     Engine      │  ← Orchestrates components
 ├─────────────────┤
-│   Broker        │  ← Queue backend (Redis/RabbitMQ/Memory)
+│   Broker        │  ← Queue backend (Redis/RabbitMQ)
 │   Statistics    │  ← Metrics and monitoring
 │   Registry      │  ← Worker function registry
 │   Serializer    │  ← Job serialization format
@@ -254,16 +254,7 @@ engine.Stop()
 
 ## Testing
 
-Use the memory broker for testing:
-
-```go
-import "github.com/BranchIntl/goworker2/brokers/memory"
-
-func TestWorker(t *testing.T) {
-	broker := memory.NewBroker(memory.DefaultOptions())
-	// ... setup engine for testing
-}
-```
+For testing, use mocks or lightweight alternatives like miniredis for Redis, or run actual brokers in Docker containers for integration tests.
 
 ## Examples
 

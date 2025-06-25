@@ -2,14 +2,13 @@
 // with pluggable components and modular architecture.
 //
 // Originally inspired by Resque-compatible job processing, goworker2 has evolved
-// into a flexible framework supporting multiple queue backends (Redis, RabbitMQ,
-// in-memory), serializers (JSON, Resque, Sneakers/ActiveJob), and statistics
-// providers.
+// into a flexible framework supporting multiple queue backends (Redis, RabbitMQ),
+// serializers (JSON, Resque, Sneakers/ActiveJob), and statistics providers.
 //
 // # Architecture
 //
 // goworker uses dependency injection with these core components:
-//   - Broker: Handles queue operations (Redis, RabbitMQ, Memory)
+//   - Broker: Handles queue operations (Redis, RabbitMQ)
 //   - Statistics: Records metrics and monitoring data
 //   - Registry: Maps job classes to worker functions
 //   - Serializer: Converts jobs to/from bytes
@@ -112,14 +111,8 @@
 //
 // # Testing
 //
-// Use the memory broker for testing without external dependencies:
-//
-//	import "github.com/BranchIntl/goworker2/brokers/memory"
-//
-//	func TestWorker(t *testing.T) {
-//		broker := memory.NewBroker(memory.DefaultOptions())
-//		// Setup engine for testing...
-//	}
+// For testing, use mocks or lightweight alternatives like miniredis for Redis,
+// or run actual brokers in Docker containers for integration tests.
 //
 // # Available Engines
 //
