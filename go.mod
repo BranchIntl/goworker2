@@ -1,10 +1,17 @@
-module github.com/benmanns/goworker
+module github.com/BranchIntl/goworker2
 
-go 1.14
+go 1.21
 
 require (
 	github.com/cihub/seelog v0.0.0-20140730094913-72ae425987bc
 	github.com/gomodule/redigo v1.8.2
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
-	vitess.io/vitess v3.0.0-rc.3.0.20181212200900-e2c5239f54d1+incompatible
+	github.com/google/uuid v1.6.0
+	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/stretchr/testify v1.10.0
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -1,228 +1,294 @@
-# goworker
+# goworker2
 
-![Build](https://github.com/benmanns/goworker/workflows/Go/badge.svg)
-[![GoDoc](https://godoc.org/github.com/benmanns/goworker?status.svg)](https://godoc.org/github.com/benmanns/goworker)
+![Build](https://github.com/BranchIntl/goworker2/workflows/Go/badge.svg)
+[![GoDoc](https://godoc.org/github.com/BranchIntl/goworker2?status.svg)](https://godoc.org/github.com/BranchIntl/goworker2)
 
-goworker is a Resque-compatible, Go-based background worker. It allows you to push jobs into a queue using an expressive language like Ruby while harnessing the efficiency and concurrency of Go to minimize job latency and cost.
+goworker2 is a Go-based background job processing library with pluggable components. It provides a clean, modular architecture supporting multiple queue backends, serializers, and statistics providers.
 
-goworker workers can run alongside Ruby Resque clients so that you can keep all but your most resource-intensive jobs in Ruby.
+Originally inspired by Resque-compatible job processing, goworker2 has evolved into a flexible framework that can work with Redis, RabbitMQ, and custom backends.
+
+**Note**: This is a complete rewrite and modernization of the original [goworker](https://github.com/benmanns/goworker) library by Benjamin Manns, designed as a new project rather than a backwards-compatible upgrade. We're grateful for the inspiration and foundation provided by the original work.
+
+## Features
+
+- **Multiple Queue Backends**: Redis, RabbitMQ, or bring your own
+- **Pluggable Serializers**: JSON, Resque, Sneakers/ActiveJob, or custom formats  
+- **Statistics Providers**: Resque-compatible, NoOp, or custom monitoring
+- **Pre-configured Engines**: Ready-to-use setups for common scenarios
+- **Graceful Shutdown**: Proper signal handling and worker cleanup
+- **Concurrent Processing**: Configurable worker pools with job distribution
+- **Health Monitoring**: Built-in health checks and statistics
+
+## Quick Start
+
+### Using Pre-configured Engines
+
+The easiest way to get started is with pre-configured engines:
+
+#### Redis with Resque Compatibility
+```go
+package main
+
+import (
+	"context"
+	"log"
+	
+	"github.com/BranchIntl/goworker2/engines"
+)
+
+func emailJob(queue string, args ...interface{}) error {
+	// Process email job
+	return nil
+}
+
+func main() {
+	engine := engines.NewResqueEngine(engines.DefaultResqueOptions())
+	engine.Register("EmailJob", emailJob)
+	
+	if err := engine.Run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+#### RabbitMQ with ActiveJob Compatibility
+```go
+package main
+
+import (
+	"context"
+	"log"
+	
+	"github.com/BranchIntl/goworker2/engines"
+)
+
+func imageProcessor(queue string, args ...interface{}) error {
+	// Process image
+	return nil
+}
+
+func main() {
+	engine := engines.NewSneakersEngine(engines.DefaultSneakersOptions())
+	engine.Register("ImageProcessor", imageProcessor)
+	
+	if err := engine.Run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+### Custom Configuration
+
+For more control, you can configure components manually:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+	
+	"github.com/BranchIntl/goworker2/brokers/redis"
+	"github.com/BranchIntl/goworker2/core"
+	"github.com/BranchIntl/goworker2/registry"
+	"github.com/BranchIntl/goworker2/serializers/resque"
+	"github.com/BranchIntl/goworker2/statistics/resque"
+)
+
+func main() {
+	// Create components
+	broker := redis.NewBroker(redis.DefaultOptions(), resque.NewSerializer())
+	stats := resque.NewStatistics(resque.DefaultOptions())
+	registry := registry.NewRegistry()
+	
+	// Create engine with custom options
+	engine := core.NewEngine(
+		broker,
+		stats,
+		registry,
+		resque.NewSerializer(),
+		core.WithConcurrency(10),
+		core.WithQueues([]string{"critical", "default"}),
+		core.WithPollInterval(5*time.Second),
+	)
+	
+	// Register workers
+	registry.Register("MyJob", func(queue string, args ...interface{}) error {
+		// Handle job
+		return nil
+	})
+	
+	// Start processing
+	if err := engine.Run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+```
 
 ## Installation
 
-To install goworker, use
-
-```sh
-go get github.com/benmanns/goworker
+```bash
+go get github.com/BranchIntl/goworker2
 ```
 
-to install the package, and then from your worker
+## Acknowledgments
 
-```go
-import "github.com/benmanns/goworker"
+This project was inspired by and builds upon the concepts from the original [goworker](https://github.com/benmanns/goworker) library by Benjamin Manns. While this is a complete rewrite with different architecture and capabilities, we acknowledge and appreciate the foundational work that made this project possible.
+
+## Architecture
+
+goworker2 uses a modular architecture with dependency injection:
+
+```
+┌─────────────────┐
+│     Engine      │  ← Orchestrates components
+├─────────────────┤
+│   Broker        │  ← Queue backend (Redis/RabbitMQ)
+│   Statistics    │  ← Metrics and monitoring
+│   Registry      │  ← Worker function registry
+│   Serializer    │  ← Job serialization format
+│   WorkerPool    │  ← Manages concurrent workers
+│   Poller        │  ← Polls queues for jobs
+└─────────────────┘
 ```
 
-## Getting Started
+### Components
 
-To create a worker, write a function matching the signature
+- **Broker**: Handles queue operations (enqueue, dequeue, ack/nack)
+- **Statistics**: Records metrics and worker information
+- **Registry**: Maps job classes to worker functions
+- **Serializer**: Converts jobs to/from bytes
+- **Engine**: Orchestrates all components and handles lifecycle
+
+### Pre-configured Engines
+
+- **ResqueEngine**: Redis + Resque serializer + Resque statistics (Ruby Resque compatibility)
+- **SneakersEngine**: RabbitMQ + ActiveJob serializer + NoOp statistics (Rails ActiveJob compatibility)
+
+See [`engines/`](engines/) directory for detailed engine documentation.
+
+## Configuration
+
+### Engine Options
 
 ```go
-func(string, ...interface{}) error
-```
-
-and register it using
-
-```go
-goworker.Register("MyClass", myFunc)
-```
-
-Here is a simple worker that prints its arguments:
-
-```go
-package main
-
-import (
-	"fmt"
-	"github.com/benmanns/goworker"
+engine := core.NewEngine(
+	broker, stats, registry, serializer,
+	core.WithConcurrency(25),                    // Number of workers
+	core.WithQueues([]string{"high", "low"}),    // Queue names
+	core.WithPollInterval(5*time.Second),        // Polling frequency
+	core.WithShutdownTimeout(30*time.Second),    // Graceful shutdown timeout
+	core.WithJobBufferSize(100),                 // Job channel buffer
+	core.WithExitOnComplete(false),              // Exit when queues empty
 )
-
-func myFunc(queue string, args ...interface{}) error {
-	fmt.Printf("From %s, %v\n", queue, args)
-	return nil
-}
-
-func init() {
-	goworker.Register("MyClass", myFunc)
-}
-
-func main() {
-	if err := goworker.Work(); err != nil {
-		fmt.Println("Error:", err)
-	}
-}
 ```
 
-To create workers that share a database pool or other resources, use a closure to share variables.
+### Broker Options
+
+#### Redis
+```go
+options := redis.DefaultOptions()
+options.URI = "redis://localhost:6379/"
+options.Namespace = "jobs:"
+options.MaxConnections = 10
+```
+
+#### RabbitMQ
+```go
+options := rabbitmq.DefaultOptions()
+options.URI = "amqp://guest:guest@localhost:5672/"
+options.Exchange = "jobs"
+options.PrefetchCount = 1
+```
+
+## Worker Functions
+
+Worker functions must match this signature:
 
 ```go
-package main
-
-import (
-	"fmt"
-	"github.com/benmanns/goworker"
-)
-
-func newMyFunc(uri string) (func(queue string, args ...interface{}) error) {
-	foo := NewFoo(uri)
-	return func(queue string, args ...interface{}) error {
-		foo.Bar(args)
-		return nil
-	}
-}
-
-func init() {
-	goworker.Register("MyClass", newMyFunc("http://www.example.com/"))
-}
-
-func main() {
-	if err := goworker.Work(); err != nil {
-		fmt.Println("Error:", err)
-	}
-}
+func(queue string, args ...interface{}) error
 ```
 
-Here is a simple worker with settings:
+### Type Assertions
+
+Use Go type assertions to handle job arguments:
 
 ```go
-package main
-
-import (
-	"fmt"
-	"github.com/benmanns/goworker"
-)
-
-func myFunc(queue string, args ...interface{}) error {
-	fmt.Printf("From %s, %v\n", queue, args)
-	return nil
-}
-
-func init() {
-	settings := goworker.WorkerSettings{
-		URI:            "redis://localhost:6379/",
-		Connections:    100,
-		Queues:         []string{"myqueue", "delimited", "queues"},
-		UseNumber:      true,
-		ExitOnComplete: false,
-		Concurrency:    2,
-		Namespace:      "resque:",
-		Interval:       5.0,
+func processUser(queue string, args ...interface{}) error {
+	if len(args) != 2 {
+		return fmt.Errorf("expected 2 arguments, got %d", len(args))
 	}
-	goworker.SetSettings(settings)
-	goworker.Register("MyClass", myFunc)
-}
-
-func main() {
-	if err := goworker.Work(); err != nil {
-		fmt.Println("Error:", err)
+	
+	userID, ok := args[0].(float64)  // JSON numbers are float64
+	if !ok {
+		return fmt.Errorf("invalid user ID type")
 	}
+	
+	action, ok := args[1].(string)
+	if !ok {
+		return fmt.Errorf("invalid action type")
+	}
+	
+	// Process user
+	return processUserAction(int(userID), action)
 }
 ```
 
-goworker worker functions receive the queue they are serving and a slice of interfaces. To use them as parameters to other functions, use Go type assertions to convert them into usable types.
+## Signal Handling
+
+goworker handles these signals automatically:
+
+- **SIGINT/SIGTERM**: Graceful shutdown
+- **Custom signals**: Can be handled in advanced examples
 
 ```go
-// Expecting (int, string, float64)
-func myFunc(queue, args ...interface{}) error {
-	idNum, ok := args[0].(json.Number)
-	if !ok {
-		return errorInvalidParam
-	}
-	id, err := idNum.Int64()
-	if err != nil {
-		return errorInvalidParam
-	}
-	name, ok := args[1].(string)
-	if !ok {
-		return errorInvalidParam
-	}
-	weightNum, ok := args[2].(json.Number)
-	if !ok {
-		return errorInvalidParam
-	}
-	weight, err := weightNum.Float64()
-	if err != nil {
-		return errorInvalidParam
-	}
-	doSomething(id, name, weight)
-	return nil
+// Automatic signal handling
+engine.Run(ctx)  // Blocks until SIGINT/SIGTERM
+
+// Manual control
+engine.Start(ctx)
+// ... custom signal handling ...
+engine.Stop()
+```
+
+## Testing
+
+For testing, use mocks or lightweight alternatives like miniredis for Redis, or run actual brokers in Docker containers for integration tests.
+
+## Examples
+
+Complete working examples are available in the [`examples/`](examples/) directory covering both pre-configured engines and manual component setup.
+
+## Monitoring and Health
+
+### Health Checks
+```go
+health := engine.Health()
+fmt.Printf("Healthy: %v\n", health.Healthy)
+fmt.Printf("Active Workers: %d\n", health.ActiveWorkers)
+for queue, count := range health.QueuedJobs {
+	fmt.Printf("Queue %s: %d jobs\n", queue, count)
 }
 ```
 
-For testing, it is helpful to use the `redis-cli` program to insert jobs onto the Redis queue:
-
-```sh
-redis-cli -r 100 RPUSH resque:queue:myqueue '{"class":"MyClass","args":["hi","there"]}'
+### Statistics
+```go
+stats, err := engine.GetStats().GetGlobalStats(ctx)
+if err == nil {
+	fmt.Printf("Total Processed: %d\n", stats.TotalProcessed)
+	fmt.Printf("Total Failed: %d\n", stats.TotalFailed)
+}
 ```
-
-will insert 100 jobs for the `MyClass` worker onto the `myqueue` queue. It is equivalent to:
-
-```ruby
-class MyClass
-  @queue = :myqueue
-end
-
-100.times do
-  Resque.enqueue MyClass, ['hi', 'there']
-end
-```
-
-or
-
-```golang
-goworker.Enqueue(&goworker.Job{
-    Queue: "myqueue",
-    Payload: goworker.Payload{
-        Class: "MyClass",
-        Args: []interface{}{"hi", "there"},
-    },
-})
-```
-
-## Flags
-
-There are several flags which control the operation of the goworker client.
-
-* `-queues="comma,delimited,queues"` — This is the only required flag. The recommended practice is to separate your Resque workers from your goworkers with different queues. Otherwise, Resque worker classes that have no goworker analog will cause the goworker process to fail the jobs. Because of this, there is no default queue, nor is there a way to select all queues (à la Resque's `*` queue). If you have multiple queues you can assign them weights. A queue with a weight of 2 will be checked twice as often as a queue with a weight of 1: `-queues='high=2,low=1'`.
-* `-interval=5.0` — Specifies the wait period between polling if no job was in the queue the last time one was requested.
-* `-concurrency=25` — Specifies the number of concurrently executing workers. This number can be as low as 1 or rather comfortably as high as 100,000, and should be tuned to your workflow and the availability of outside resources.
-* `-connections=2` — Specifies the maximum number of Redis connections that goworker will consume between the poller and all workers. There is not much performance gain over two and a slight penalty when using only one. This is configurable in case you need to keep connection counts low for cloud Redis providers who limit plans on `maxclients`.
-* `-uri=redis://localhost:6379/` — Specifies the URI of the Redis database from which goworker polls for jobs. Accepts URIs of the format `redis://user:pass@host:port/db` or `unix:///path/to/redis.sock`. The flag may also be set by the environment variable `$($REDIS_PROVIDER)` or `$REDIS_URL`. E.g. set `$REDIS_PROVIDER` to `REDISTOGO_URL` on Heroku to let the Redis To Go add-on configure the Redis database.
-* `-namespace=resque:` — Specifies the namespace from which goworker retrieves jobs and stores stats on workers.
-* `-exit-on-complete=false` — Exits goworker when there are no jobs left in the queue. This is helpful in conjunction with the `time` command to benchmark different configurations.
-
-You can also configure your own flags for use within your workers. Be sure to set them before calling `goworker.Main()`. It is okay to call `flags.Parse()` before calling `goworker.Main()` if you need to do additional processing on your flags.
-
-## Signal Handling in goworker
-
-To stop goworker, send a `QUIT`, `TERM`, or `INT` signal to the process. This will immediately stop job polling. There can be up to `$CONCURRENCY` jobs currently running, which will continue to run until they are finished.
-
-## Failure Modes
-
-Like Resque, goworker makes no guarantees about the safety of jobs in the event of process shutdown. Workers must be both idempotent and tolerant to loss of the job in the event of failure.
-
-If the process is killed with a `KILL` or by a system failure, there may be one job that is currently in the poller's buffer that will be lost without any representation in either the queue or the worker variable.
-
-If you are running goworker on a system like Heroku, which sends a `TERM` to signal a process that it needs to stop, ten seconds later sends a `KILL` to force the process to stop, your jobs must finish within 10 seconds or they may be lost. Jobs will be recoverable from the Redis database under
-
-```
-resque:worker:<hostname>:<process-id>-<worker-id>:<queues>
-```
-
-as a JSON object with keys `queue`, `run_at`, and `payload`, but the process is manual. Additionally, there is no guarantee that the job in Redis under the worker key has not finished, if the process is killed before goworker can flush the update to Redis.
 
 ## Contributing
 
-1. [Fork it](https://github.com/benmanns/goworker/fork)
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -am 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
