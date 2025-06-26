@@ -180,7 +180,6 @@ engine := core.NewEngine(
 	core.WithPollInterval(5*time.Second),        // Polling frequency
 	core.WithShutdownTimeout(30*time.Second),    // Graceful shutdown timeout
 	core.WithJobBufferSize(100),                 // Job channel buffer
-	core.WithExitOnComplete(false),              // Exit when queues empty
 )
 ```
 
@@ -201,6 +200,10 @@ options.URI = "amqp://guest:guest@localhost:5672/"
 options.Exchange = "jobs"
 options.PrefetchCount = 1
 ```
+
+## Logging
+
+goworker2 uses Go's standard `log/slog` library for structured logging. By default, it uses the default slog logger. To customize logging, configure your logger before creating the engine using `slog.SetDefault(logger)`. For example: `slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))`.
 
 ## Worker Functions
 

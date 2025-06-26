@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // Mock implementations for testing
@@ -199,10 +198,6 @@ func (m *MockBroker) Type() string {
 
 func (m *MockBroker) Capabilities() BrokerCapabilities {
 	return m.capabilities
-}
-
-func (m *MockBroker) SetLogger(logger seelog.LoggerInterface) {
-	// Mock implementation - just ignore the logger
 }
 
 // Test helpers

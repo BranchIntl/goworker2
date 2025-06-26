@@ -3,12 +3,12 @@ package rabbitmq
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -21,7 +21,6 @@ type RabbitMQBroker struct {
 	declaredQueues map[string]bool   // Track declared queues
 	consumerQueues []string          // Queues to consume from
 	consumerTags   map[string]string // Track consumer tags
-	logger         seelog.LoggerInterface
 }
 
 // NewBroker creates a new RabbitMQ broker
@@ -102,11 +101,6 @@ func (r *RabbitMQBroker) Health() error {
 // Type returns the broker type
 func (r *RabbitMQBroker) Type() string {
 	return "rabbitmq"
-}
-
-// SetLogger sets the logger for the broker
-func (r *RabbitMQBroker) SetLogger(logger seelog.LoggerInterface) {
-	r.logger = logger
 }
 
 // Capabilities returns RabbitMQ broker capabilities
@@ -331,16 +325,9 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 	return nil
 }
 
-// logError logs an error message if logger is available
-func (r *RabbitMQBroker) logError(format string, args ...interface{}) {
-	if r.logger != nil {
-		r.logger.Errorf(format, args...)
-	}
-}
-
 // Start implements the Poller interface for push-based consumption
 func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
-	r.logger.Infof("Starting RabbitMQ consumer for queues: %v", r.consumerQueues)
+	slog.Info("Starting RabbitMQ consumer", "queues", r.consumerQueues)
 
 	for _, queue := range r.consumerQueues {
 		if err := r.ensureQueue(queue); err != nil {
@@ -370,7 +357,7 @@ func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) erro
 
 	// Keep running until context is cancelled
 	<-ctx.Done()
-	r.logger.Info("RabbitMQ consumer stopped")
+	slog.Info("RabbitMQ consumer stopped")
 	close(jobChan)
 	return nil
 }
@@ -383,7 +370,7 @@ func (r *RabbitMQBroker) handleDeliveries(ctx context.Context, queue string, del
 			return
 		case delivery, ok := <-deliveries:
 			if !ok {
-				r.logger.Warnf("Delivery channel closed for queue %s", queue)
+				slog.Warn("Delivery channel closed", "queue", queue)
 				return
 			}
 
@@ -394,11 +381,11 @@ func (r *RabbitMQBroker) handleDeliveries(ctx context.Context, queue string, del
 				case <-ctx.Done():
 					// Put job back on queue
 					if err := delivery.Nack(false, true); err != nil {
-						r.logger.Errorf("Failed to nack job during shutdown: %v", err)
+						slog.Error("Failed to nack job during shutdown", "error", err)
 					}
 					return
 				case jobChan <- job:
-					r.logger.Debugf("Job sent to workers: %s", job.GetClass())
+					slog.Debug("Job sent to workers", "class", job.GetClass())
 				}
 			}
 		}
@@ -422,9 +409,9 @@ func (r *RabbitMQBroker) convertDeliveryToJob(delivery amqp.Delivery, queue stri
 	if err != nil {
 		// Reject message if we can't deserialize it
 		if nackErr := delivery.Nack(false, false); nackErr != nil {
-			r.logError("Failed to nack message after deserialization error: %v", nackErr)
+			slog.Error("Failed to nack message after deserialization error", "error", nackErr)
 		}
-		r.logError("Failed to deserialize job: %v", err)
+		slog.Error("Failed to deserialize job", "error", err)
 		return nil
 	}
 

@@ -66,8 +66,6 @@ func main() {
 		core.WithPollInterval(3*time.Second),
 		core.WithShutdownTimeout(45*time.Second),
 		core.WithJobBufferSize(50),
-		core.WithExitOnComplete(false),
-		core.WithStrictQueues(false), // Random queue order
 	)
 
 	// Register multiple job handlers

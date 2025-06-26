@@ -23,7 +23,6 @@ func main() {
 		core.WithConcurrency(2),
 		core.WithQueues([]string{"myqueue"}),
 		core.WithPollInterval(5 * time.Second),
-		core.WithExitOnComplete(false),
 	}
 
 	engine := engines.NewSneakersEngine(options)

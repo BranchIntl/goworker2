@@ -2,21 +2,18 @@ package core
 
 import (
 	"context"
-	"math/rand"
+	"log/slog"
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // StandardPoller is a broker-agnostic job poller for pull-based brokers
 type StandardPoller struct {
-	broker      Broker
-	stats       Statistics
-	queues      []string
-	interval    time.Duration
-	logger      seelog.LoggerInterface
-	strictOrder bool
+	broker   Broker
+	stats    Statistics
+	queues   []string
+	interval time.Duration
 }
 
 // NewStandardPoller creates a new standard poller
@@ -25,32 +22,29 @@ func NewStandardPoller(
 	stats Statistics,
 	queues []string,
 	interval time.Duration,
-	logger seelog.LoggerInterface,
 ) *StandardPoller {
 	return &StandardPoller{
-		broker:      broker,
-		stats:       stats,
-		queues:      queues,
-		interval:    interval,
-		logger:      logger,
-		strictOrder: true,
+		broker:   broker,
+		stats:    stats,
+		queues:   queues,
+		interval: interval,
 	}
 }
 
 // Start begins polling for jobs
 func (p *StandardPoller) Start(ctx context.Context, jobChan chan<- job.Job) error {
-	p.logger.Infof("StandardPoller started for queues: %v", p.queues)
+	slog.Info("StandardPoller started", "queues", p.queues)
 
 	for {
 		select {
 		case <-ctx.Done():
 			close(jobChan)
-			p.logger.Info("StandardPoller stopped")
+			slog.Info("StandardPoller stopped")
 			return nil
 		default:
 			job, err := p.pollOnce(ctx)
 			if err != nil {
-				p.logger.Errorf("Error polling: %v", err)
+				slog.Error("Error polling", "error", err)
 				// Brief pause on error
 				time.Sleep(time.Second)
 				continue
@@ -61,20 +55,20 @@ func (p *StandardPoller) Start(ctx context.Context, jobChan chan<- job.Job) erro
 				case <-ctx.Done():
 					// Put job back on queue
 					if err := p.broker.Nack(ctx, job, true); err != nil {
-						p.logger.Errorf("Error requeueing job: %v", err)
+						slog.Error("Error requeueing job", "error", err)
 					}
 					close(jobChan)
-					p.logger.Info("StandardPoller stopped")
+					slog.Info("StandardPoller stopped")
 					return nil
 				case jobChan <- job:
-					p.logger.Debugf("Job sent to workers: %s", job.GetClass())
+					slog.Debug("Job sent to workers", "class", job.GetClass())
 				}
 			} else {
 				// No job found, wait before polling again
 				select {
 				case <-ctx.Done():
 					close(jobChan)
-					p.logger.Info("StandardPoller stopped")
+					slog.Info("StandardPoller stopped")
 					return nil
 				case <-time.After(p.interval):
 				}
@@ -85,10 +79,10 @@ func (p *StandardPoller) Start(ctx context.Context, jobChan chan<- job.Job) erro
 
 // pollOnce attempts to get a job from the queues
 func (p *StandardPoller) pollOnce(ctx context.Context) (job.Job, error) {
-	queues := p.getQueueOrder()
+	queues := p.queues
 
 	for _, queue := range queues {
-		p.logger.Debugf("Checking queue: %s", queue)
+		slog.Debug("Checking queue", "queue", queue)
 
 		job, err := p.broker.Dequeue(ctx, queue)
 		if err != nil {
@@ -96,30 +90,10 @@ func (p *StandardPoller) pollOnce(ctx context.Context) (job.Job, error) {
 		}
 
 		if job != nil {
-			p.logger.Debugf("Found job on %s: %s", queue, job.GetClass())
+			slog.Debug("Found job", "queue", queue, "class", job.GetClass())
 			return job, nil
 		}
 	}
 
 	return nil, nil
-}
-
-// getQueueOrder returns the queue processing order
-func (p *StandardPoller) getQueueOrder() []string {
-	if p.strictOrder {
-		return p.queues
-	}
-
-	// Shuffle queues for random order
-	queues := make([]string, len(p.queues))
-	perm := rand.Perm(len(p.queues))
-	for i, v := range perm {
-		queues[i] = p.queues[v]
-	}
-	return queues
-}
-
-// SetStrictOrder sets whether to use strict queue ordering
-func (p *StandardPoller) SetStrictOrder(strict bool) {
-	p.strictOrder = strict
 }

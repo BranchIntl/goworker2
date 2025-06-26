@@ -2,12 +2,12 @@ package core
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // WorkerPool manages a pool of workers
@@ -18,7 +18,6 @@ type WorkerPool struct {
 	concurrency   int
 	queues        []string
 	jobChan       <-chan job.Job
-	logger        seelog.LoggerInterface
 	activeWorkers int32
 	workers       []*Worker
 	wg            sync.WaitGroup
@@ -33,7 +32,6 @@ func NewWorkerPool(
 	concurrency int,
 	queues []string,
 	jobChan <-chan job.Job,
-	logger seelog.LoggerInterface,
 	broker Broker,
 ) *WorkerPool {
 	return &WorkerPool{
@@ -43,7 +41,6 @@ func NewWorkerPool(
 		concurrency: concurrency,
 		queues:      queues,
 		jobChan:     jobChan,
-		logger:      logger,
 		workers:     make([]*Worker, 0, concurrency),
 		broker:      broker,
 	}
@@ -51,7 +48,7 @@ func NewWorkerPool(
 
 // Start begins processing jobs with the worker pool
 func (wp *WorkerPool) Start(ctx context.Context) error {
-	wp.logger.Infof("Starting worker pool with %d workers", wp.concurrency)
+	slog.Info("Starting worker pool", "workers", wp.concurrency)
 
 	// Create workers
 	for i := 0; i < wp.concurrency; i++ {
@@ -60,7 +57,6 @@ func (wp *WorkerPool) Start(ctx context.Context) error {
 			wp.queues,
 			wp.registry,
 			wp.stats,
-			wp.logger,
 			wp.broker,
 		)
 		wp.workers = append(wp.workers, worker)
@@ -75,14 +71,14 @@ func (wp *WorkerPool) Start(ctx context.Context) error {
 			defer atomic.AddInt32(&wp.activeWorkers, -1)
 
 			if err := w.Work(ctx, wp.jobChan); err != nil {
-				wp.logger.Errorf("Worker error: %v", err)
+				slog.Error("Worker error", "error", err)
 			}
 		}(worker)
 	}
 
 	// Wait for all workers to complete
 	wp.wg.Wait()
-	wp.logger.Info("Worker pool stopped")
+	slog.Info("Worker pool stopped")
 	return nil
 }
 
