@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // Engine is the main orchestration engine
@@ -27,8 +27,6 @@ type Engine struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
-
-	logger seelog.LoggerInterface
 }
 
 // NewEngine creates a new engine with dependency injection
@@ -44,24 +42,18 @@ func NewEngine(
 		opt(config)
 	}
 
-	logger, _ := seelog.LoggerFromWriterWithMinLevel(config.LogOutput, config.LogLevel)
-
 	return &Engine{
 		broker:     broker,
 		stats:      stats,
 		registry:   registry,
 		serializer: serializer,
 		config:     config,
-		logger:     logger,
 	}
 }
 
 // Start begins processing jobs
 func (e *Engine) Start(ctx context.Context) error {
 	e.ctx, e.cancel = context.WithCancel(ctx)
-
-	// Set logger on broker
-	e.broker.SetLogger(e.logger)
 
 	// If broker implements SetConsumerQueues (for push-based consumption), set the queues
 	if setQueues, ok := e.broker.(interface{ SetConsumerQueues([]string) }); ok {
@@ -94,7 +86,6 @@ func (e *Engine) Start(ctx context.Context) error {
 			e.stats,
 			e.config.Queues,
 			e.config.PollInterval,
-			e.logger,
 		)
 	}
 
@@ -106,7 +97,6 @@ func (e *Engine) Start(ctx context.Context) error {
 		e.config.Concurrency,
 		e.config.Queues,
 		jobChan,
-		e.logger,
 		e.broker,
 	)
 
@@ -115,18 +105,18 @@ func (e *Engine) Start(ctx context.Context) error {
 	go func() {
 		defer e.wg.Done()
 		if err := poller.Start(e.ctx, jobChan); err != nil {
-			e.logger.Errorf("Poller error: %v", err)
+			slog.Error("Poller error", "error", err)
 		}
 	}()
 
 	go func() {
 		defer e.wg.Done()
 		if err := e.workerPool.Start(e.ctx); err != nil {
-			e.logger.Errorf("Worker pool error: %v", err)
+			slog.Error("Worker pool error", "error", err)
 		}
 	}()
 
-	e.logger.Info("Engine started")
+	slog.Info("Engine started")
 	return nil
 }
 
@@ -145,18 +135,18 @@ func (e *Engine) Stop() error {
 
 	select {
 	case <-done:
-		e.logger.Info("Engine stopped gracefully")
+		slog.Info("Engine stopped gracefully")
 	case <-time.After(e.config.ShutdownTimeout):
-		e.logger.Warn("Engine shutdown timeout exceeded")
+		slog.Warn("Engine shutdown timeout exceeded")
 	}
 
 	// Close connections
 	if err := e.broker.Close(); err != nil {
-		e.logger.Errorf("Error closing broker: %v", err)
+		slog.Error("Error closing broker", "error", err)
 	}
 
 	if err := e.stats.Close(); err != nil {
-		e.logger.Errorf("Error closing statistics: %v", err)
+		slog.Error("Error closing statistics", "error", err)
 	}
 
 	return nil
@@ -209,9 +199,9 @@ func (e *Engine) Run(ctx context.Context) error {
 	// Wait for either context cancellation or signal
 	select {
 	case <-ctx.Done():
-		e.logger.Info("Context cancelled, shutting down...")
+		slog.Info("Context cancelled, shutting down...")
 	case sig := <-sigChan:
-		e.logger.Infof("Received signal %v, shutting down...", sig)
+		slog.Info("Received signal, shutting down...", "signal", sig)
 	}
 
 	// Graceful shutdown

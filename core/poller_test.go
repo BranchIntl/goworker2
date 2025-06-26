@@ -7,14 +7,12 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPoller_Start_WithJobs(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"test-queue"}
 
@@ -22,7 +20,7 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{"arg1"})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewStandardPoller(broker, stats, queues, 100*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, stats, queues, 100*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -54,14 +52,13 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 func TestPoller_Start_NoJobs(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"empty-queue"}
 
 	// Configure broker to return nil (no jobs)
 	broker.SetShouldReturnNilOnDequeue(true)
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -93,7 +90,6 @@ func TestPoller_Start_NoJobs(t *testing.T) {
 func TestPoller_Start_MultipleQueues(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"queue1", "queue2", "queue3"}
 
@@ -106,7 +102,7 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 	broker.AddJobToQueue("queue2", job2)
 	broker.AddJobToQueue("queue3", job3)
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -129,25 +125,21 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 
 	assert.Len(t, receivedJobs, 3)
 
-	// With strict ordering, should receive jobs in queue order
-	if poller.strictOrder {
-		assert.Equal(t, "Job1", receivedJobs[0].GetClass())
-		assert.Equal(t, "Job2", receivedJobs[1].GetClass())
-		assert.Equal(t, "Job3", receivedJobs[2].GetClass())
-	}
+	assert.Equal(t, "Job1", receivedJobs[0].GetClass())
+	assert.Equal(t, "Job2", receivedJobs[1].GetClass())
+	assert.Equal(t, "Job3", receivedJobs[2].GetClass())
 }
 
 func TestPoller_Start_DequeueError(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"error-queue"}
 
 	// Configure broker to return error
 	broker.SetDequeueError(errors.New("dequeue failed"))
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -159,9 +151,6 @@ func TestPoller_Start_DequeueError(t *testing.T) {
 
 func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
-	logger := seelog.Disabled
-	// Use unbuffered channel to force blocking
 	jobChan := make(chan job.Job)
 	queues := []string{"test-queue"}
 
@@ -169,7 +158,7 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewStandardPoller(broker, stats, queues, 10*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, nil, queues, 10*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -198,48 +187,16 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	assert.GreaterOrEqual(t, len(broker.GetNackedJobs()), 0)
 }
 
-func TestPoller_getQueueOrder_Random(t *testing.T) {
-	broker := NewMockBroker()
-	stats := NewMockStatistics()
-	logger := seelog.Disabled
-	queues := []string{"queue1", "queue2", "queue3", "queue4", "queue5"}
-
-	poller := NewStandardPoller(broker, stats, queues, time.Second, logger)
-	poller.SetStrictOrder(false)
-
-	// Get multiple orders and check that they're shuffled
-	orders := make([][]string, 10)
-	for i := 0; i < 10; i++ {
-		orders[i] = poller.getQueueOrder()
-		assert.Len(t, orders[i], len(queues))
-		// Verify all queues are present
-		for _, queue := range queues {
-			assert.Contains(t, orders[i], queue)
-		}
-	}
-
-	// Check that at least some orders are different (very high probability)
-	differentFound := false
-	for i := 1; i < len(orders); i++ {
-		if !slicesEqual(orders[0], orders[i]) {
-			differentFound = true
-			break
-		}
-	}
-	assert.True(t, differentFound, "Expected some queue orders to be different with random ordering")
-}
-
 func TestPoller_pollOnce_Error(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 	queues := []string{"error-queue"}
 
 	// Configure broker to return error
 	testError := errors.New("dequeue error")
 	broker.SetDequeueError(testError)
 
-	poller := NewStandardPoller(broker, stats, queues, time.Second, logger)
+	poller := NewStandardPoller(broker, stats, queues, time.Second)
 
 	ctx := context.Background()
 	job, err := poller.pollOnce(ctx)
@@ -252,7 +209,6 @@ func TestPoller_pollOnce_Error(t *testing.T) {
 func TestPoller_Start_ChannelBlocked(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
 
 	// Create small buffered channel that can be filled
 	jobChan := make(chan job.Job, 1)
@@ -264,7 +220,7 @@ func TestPoller_Start_ChannelBlocked(t *testing.T) {
 		broker.AddJobToQueue("test-queue", testJob)
 	}
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -289,17 +245,4 @@ func TestPoller_Start_ChannelBlocked(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("Did not receive second job")
 	}
-}
-
-// Helper function to compare slices
-func slicesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,7 +45,7 @@ func TestWorker_Work_JobProcessing(t *testing.T) {
 func TestWorker_Work_JobFailure(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	// Register a failing worker function
@@ -55,7 +54,7 @@ func TestWorker_Work_JobFailure(t *testing.T) {
 		return testError
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel and send a job
 	jobChan := make(chan job.Job, 1)
@@ -81,10 +80,10 @@ func TestWorker_Work_JobFailure(t *testing.T) {
 func TestWorker_Work_UnknownJob(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel with unknown job type
 	jobChan := make(chan job.Job, 1)
@@ -106,7 +105,7 @@ func TestWorker_Work_UnknownJob(t *testing.T) {
 func TestWorker_Work_PanicRecovery(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	// Register a panicking worker function
@@ -114,7 +113,7 @@ func TestWorker_Work_PanicRecovery(t *testing.T) {
 		panic("test panic")
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel and send a job
 	jobChan := make(chan job.Job, 1)
@@ -136,10 +135,10 @@ func TestWorker_Work_PanicRecovery(t *testing.T) {
 func TestWorker_Work_ContextCancellation(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel but don't send any jobs
 	jobChan := make(chan job.Job)
@@ -155,10 +154,10 @@ func TestWorker_Work_ContextCancellation(t *testing.T) {
 func TestWorker_Work_ChannelClosed(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel and close it immediately
 	jobChan := make(chan job.Job)
@@ -174,7 +173,7 @@ func TestWorker_Work_ChannelClosed(t *testing.T) {
 func TestWorker_Work_StatisticsErrors(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	// Set up statistics to return errors
@@ -184,7 +183,7 @@ func TestWorker_Work_StatisticsErrors(t *testing.T) {
 		return nil
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel and send a job
 	jobChan := make(chan job.Job, 1)
@@ -207,7 +206,7 @@ func TestWorker_Work_StatisticsErrors(t *testing.T) {
 func TestWorker_Work_BrokerErrors(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	// Set up broker to return ack/nack errors
@@ -217,7 +216,7 @@ func TestWorker_Work_BrokerErrors(t *testing.T) {
 		return nil
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel and send a job
 	jobChan := make(chan job.Job, 1)
@@ -236,7 +235,7 @@ func TestWorker_Work_BrokerErrors(t *testing.T) {
 func TestWorker_ProcessMultipleJobs(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	jobCount := 0
@@ -245,7 +244,7 @@ func TestWorker_ProcessMultipleJobs(t *testing.T) {
 		return nil
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel with multiple jobs
 	jobChan := make(chan job.Job, 3)
@@ -271,7 +270,7 @@ func TestWorker_ProcessMultipleJobs(t *testing.T) {
 func TestWorker_LongRunningJob(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	logger := seelog.Disabled
+
 	broker := NewMockBroker()
 
 	jobStarted := make(chan bool)
@@ -283,7 +282,7 @@ func TestWorker_LongRunningJob(t *testing.T) {
 		return nil
 	})
 
-	worker := NewWorker("test", []string{"test-queue"}, registry, stats, logger, broker)
+	worker := NewWorker("test", []string{"test-queue"}, registry, stats, broker)
 
 	// Create job channel
 	jobChan := make(chan job.Job, 1)

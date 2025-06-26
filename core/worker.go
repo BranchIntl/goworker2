@@ -3,13 +3,13 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync/atomic"
 	"time"
 
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // Worker represents an individual worker
@@ -20,7 +20,6 @@ type Worker struct {
 	queues   []string
 	registry Registry
 	stats    Statistics
-	logger   seelog.LoggerInterface
 	broker   Broker
 
 	// Statistics
@@ -35,7 +34,6 @@ func NewWorker(
 	queues []string,
 	registry Registry,
 	stats Statistics,
-	logger seelog.LoggerInterface,
 	broker Broker,
 ) *Worker {
 	hostname, _ := os.Hostname()
@@ -47,7 +45,6 @@ func NewWorker(
 		queues:    queues,
 		registry:  registry,
 		stats:     stats,
-		logger:    logger,
 		broker:    broker,
 		startTime: time.Now(),
 	}
@@ -77,25 +74,25 @@ func (w *Worker) Work(ctx context.Context, jobs <-chan job.Job) error {
 	}
 
 	if err := w.stats.RegisterWorker(ctx, workerInfo); err != nil {
-		w.logger.Errorf("Failed to register worker: %v", err)
+		slog.Error("Failed to register worker", "error", err)
 	}
 
 	defer func() {
 		if err := w.stats.UnregisterWorker(ctx, w.GetID()); err != nil {
-			w.logger.Errorf("Failed to unregister worker: %v", err)
+			slog.Error("Failed to unregister worker", "error", err)
 		}
 	}()
 
-	w.logger.Infof("Worker %s started", w.GetID())
+	slog.Info("Worker started", "id", w.GetID())
 
 	for {
 		select {
 		case <-ctx.Done():
-			w.logger.Infof("Worker %s stopping", w.GetID())
+			slog.Info("Worker stopping", "id", w.GetID())
 			return nil
 		case job, ok := <-jobs:
 			if !ok {
-				w.logger.Infof("Worker %s job channel closed", w.GetID())
+				slog.Info("Worker job channel closed", "id", w.GetID())
 				return nil
 			}
 
@@ -117,7 +114,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 
 	// Record job started
 	if err := w.stats.RecordJobStarted(ctx, job, workerInfo); err != nil {
-		w.logger.Errorf("Failed to record job start: %v", err)
+		slog.Error("Failed to record job start", "error", err)
 	}
 
 	// Get worker function
@@ -127,7 +124,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job for unknown worker
 		if err := w.broker.Nack(ctx, job, true); err != nil {
-			w.logger.Errorf("Failed to nack job: %v", err)
+			slog.Error("Failed to nack job", "error", err)
 		}
 		return
 	}
@@ -139,13 +136,13 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job on error
 		if err := w.broker.Nack(ctx, job, true); err != nil {
-			w.logger.Errorf("Failed to nack job: %v", err)
+			slog.Error("Failed to nack job", "error", err)
 		}
 	} else {
 		w.handleJobSuccess(ctx, job, workerInfo, startTime)
 		// Ack the job on success
 		if err := w.broker.Ack(ctx, job); err != nil {
-			w.logger.Errorf("Failed to ack job: %v", err)
+			slog.Error("Failed to ack job", "error", err)
 		}
 	}
 }
@@ -173,10 +170,10 @@ func (w *Worker) handleJobSuccess(ctx context.Context, job job.Job, worker Worke
 	atomic.AddInt64(&w.processed, 1)
 
 	if err := w.stats.RecordJobCompleted(ctx, job, worker, duration); err != nil {
-		w.logger.Errorf("Failed to record job completion: %v", err)
+		slog.Error("Failed to record job completion", "error", err)
 	}
 
-	w.logger.Debugf("Job %s completed in %v", job.GetClass(), duration)
+	slog.Debug("Job completed", "class", job.GetClass(), "duration", duration)
 }
 
 // handleJobError records job failure
@@ -186,10 +183,10 @@ func (w *Worker) handleJobError(ctx context.Context, job job.Job, worker WorkerI
 	atomic.AddInt64(&w.failed, 1)
 
 	if err := w.stats.RecordJobFailed(ctx, job, worker, err, duration); err != nil {
-		w.logger.Errorf("Failed to record job failure: %v", err)
+		slog.Error("Failed to record job failure", "error", err)
 	}
 
-	w.logger.Errorf("Job %s failed: %v", job.GetClass(), err)
+	slog.Error("Job failed", "class", job.GetClass(), "error", err)
 }
 
 // GetStats returns current worker statistics

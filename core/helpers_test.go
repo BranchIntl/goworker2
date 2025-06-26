@@ -2,11 +2,12 @@ package core
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // TestSetup provides common test dependencies
@@ -15,17 +16,21 @@ type TestSetup struct {
 	Stats      *MockStatistics
 	Registry   *MockRegistry
 	Serializer *MockSerializer
-	Logger     seelog.LoggerInterface
 }
 
 // NewTestSetup creates a standard test setup with all mocks
 func NewTestSetup() *TestSetup {
+	// Set up a discard logger for tests to avoid noise
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelError, // Only show errors in tests
+	}))
+	slog.SetDefault(logger)
+
 	return &TestSetup{
 		Broker:     NewMockBroker(),
 		Stats:      NewMockStatistics(),
 		Registry:   NewMockRegistry(),
 		Serializer: NewMockSerializer(),
-		Logger:     seelog.Disabled,
 	}
 }
 
@@ -133,7 +138,7 @@ func (b *WorkerBuilder) WithQueues(queues []string) *WorkerBuilder {
 
 // Build creates the worker
 func (b *WorkerBuilder) Build() *Worker {
-	return NewWorker(b.id, b.queues, b.setup.Registry, b.setup.Stats, b.setup.Logger, b.setup.Broker)
+	return NewWorker(b.id, b.queues, b.setup.Registry, b.setup.Stats, b.setup.Broker)
 }
 
 // PollerBuilder helps create pollers for testing
@@ -168,7 +173,7 @@ func (b *PollerBuilder) WithInterval(interval time.Duration) *PollerBuilder {
 
 // Build creates the poller
 func (b *PollerBuilder) Build() *StandardPoller {
-	return NewStandardPoller(b.setup.Broker, b.setup.Stats, b.queues, b.interval, b.setup.Logger)
+	return NewStandardPoller(b.setup.Broker, b.setup.Stats, b.queues, b.interval)
 }
 
 // WorkerPoolBuilder helps create worker pools for testing
@@ -204,7 +209,7 @@ func (b *WorkerPoolBuilder) WithQueues(queues []string) *WorkerPoolBuilder {
 // Build creates the worker pool
 func (b *WorkerPoolBuilder) Build() *WorkerPool {
 	return NewWorkerPool(b.setup.Registry, b.setup.Stats, b.setup.Serializer,
-		b.concurrency, b.queues, b.jobChan, b.setup.Logger, b.setup.Broker)
+		b.concurrency, b.queues, b.jobChan, b.setup.Broker)
 }
 
 // ErrorTestCase represents a common error test scenario
