@@ -167,8 +167,8 @@ func (b *PollerBuilder) WithInterval(interval time.Duration) *PollerBuilder {
 }
 
 // Build creates the poller
-func (b *PollerBuilder) Build() *Poller {
-	return NewPoller(b.setup.Broker, b.setup.Stats, b.queues, b.interval, b.jobChan, b.setup.Logger)
+func (b *PollerBuilder) Build() *StandardPoller {
+	return NewStandardPoller(b.setup.Broker, b.setup.Stats, b.queues, b.interval, b.setup.Logger)
 }
 
 // WorkerPoolBuilder helps create worker pools for testing

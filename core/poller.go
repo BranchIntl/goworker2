@@ -9,46 +9,43 @@ import (
 	"github.com/cihub/seelog"
 )
 
-// Poller is a broker-agnostic job poller
-type Poller struct {
+// StandardPoller is a broker-agnostic job poller for pull-based brokers
+type StandardPoller struct {
 	broker      Broker
 	stats       Statistics
 	queues      []string
 	interval    time.Duration
-	jobChan     chan<- job.Job
 	logger      seelog.LoggerInterface
 	strictOrder bool
 }
 
-// NewPoller creates a new poller
-func NewPoller(
+// NewStandardPoller creates a new standard poller
+func NewStandardPoller(
 	broker Broker,
 	stats Statistics,
 	queues []string,
 	interval time.Duration,
-	jobChan chan<- job.Job,
 	logger seelog.LoggerInterface,
-) *Poller {
-	return &Poller{
+) *StandardPoller {
+	return &StandardPoller{
 		broker:      broker,
 		stats:       stats,
 		queues:      queues,
 		interval:    interval,
-		jobChan:     jobChan,
 		logger:      logger,
 		strictOrder: true,
 	}
 }
 
 // Start begins polling for jobs
-func (p *Poller) Start(ctx context.Context) error {
-	p.logger.Infof("Poller started for queues: %v", p.queues)
+func (p *StandardPoller) Start(ctx context.Context, jobChan chan<- job.Job) error {
+	p.logger.Infof("StandardPoller started for queues: %v", p.queues)
 
 	for {
 		select {
 		case <-ctx.Done():
-			close(p.jobChan)
-			p.logger.Info("Poller stopped")
+			close(jobChan)
+			p.logger.Info("StandardPoller stopped")
 			return nil
 		default:
 			job, err := p.pollOnce(ctx)
@@ -66,18 +63,18 @@ func (p *Poller) Start(ctx context.Context) error {
 					if err := p.broker.Nack(ctx, job, true); err != nil {
 						p.logger.Errorf("Error requeueing job: %v", err)
 					}
-					close(p.jobChan)
-					p.logger.Info("Poller stopped")
+					close(jobChan)
+					p.logger.Info("StandardPoller stopped")
 					return nil
-				case p.jobChan <- job:
+				case jobChan <- job:
 					p.logger.Debugf("Job sent to workers: %s", job.GetClass())
 				}
 			} else {
 				// No job found, wait before polling again
 				select {
 				case <-ctx.Done():
-					close(p.jobChan)
-					p.logger.Info("Poller stopped")
+					close(jobChan)
+					p.logger.Info("StandardPoller stopped")
 					return nil
 				case <-time.After(p.interval):
 				}
@@ -87,7 +84,7 @@ func (p *Poller) Start(ctx context.Context) error {
 }
 
 // pollOnce attempts to get a job from the queues
-func (p *Poller) pollOnce(ctx context.Context) (job.Job, error) {
+func (p *StandardPoller) pollOnce(ctx context.Context) (job.Job, error) {
 	queues := p.getQueueOrder()
 
 	for _, queue := range queues {
@@ -108,7 +105,7 @@ func (p *Poller) pollOnce(ctx context.Context) (job.Job, error) {
 }
 
 // getQueueOrder returns the queue processing order
-func (p *Poller) getQueueOrder() []string {
+func (p *StandardPoller) getQueueOrder() []string {
 	if p.strictOrder {
 		return p.queues
 	}
@@ -123,6 +120,6 @@ func (p *Poller) getQueueOrder() []string {
 }
 
 // SetStrictOrder sets whether to use strict queue ordering
-func (p *Poller) SetStrictOrder(strict bool) {
+func (p *StandardPoller) SetStrictOrder(strict bool) {
 	p.strictOrder = strict
 }
