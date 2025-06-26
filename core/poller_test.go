@@ -151,6 +151,7 @@ func TestPoller_Start_DequeueError(t *testing.T) {
 
 func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	broker := NewMockBroker()
+	stats := NewMockStatistics()
 	jobChan := make(chan job.Job)
 	queues := []string{"test-queue"}
 
@@ -158,7 +159,7 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewStandardPoller(broker, nil, queues, 10*time.Millisecond)
+	poller := NewStandardPoller(broker, stats, queues, 10*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
