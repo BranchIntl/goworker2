@@ -12,22 +12,36 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// RabbitMQBroker implements the Broker interface for RabbitMQ
+// RabbitMQBroker implements the Broker and Poller interfaces for RabbitMQ
 type RabbitMQBroker struct {
-	connection *amqp.Connection
-	channel    *amqp.Channel
-	options    Options
-	serializer core.Serializer
-	queues     map[string]bool // Track declared queues
-	logger     seelog.LoggerInterface
+	connection     *amqp.Connection
+	channel        *amqp.Channel
+	options        Options
+	serializer     core.Serializer
+	declaredQueues map[string]bool   // Track declared queues
+	consumerQueues []string          // Queues to consume from
+	consumerTags   map[string]string // Track consumer tags
+	logger         seelog.LoggerInterface
 }
 
 // NewBroker creates a new RabbitMQ broker
 func NewBroker(options Options, serializer core.Serializer) *RabbitMQBroker {
 	return &RabbitMQBroker{
-		options:    options,
-		serializer: serializer,
-		queues:     make(map[string]bool),
+		options:        options,
+		serializer:     serializer,
+		declaredQueues: make(map[string]bool),
+		consumerTags:   make(map[string]string),
+	}
+}
+
+// NewBrokerWithQueues creates a new RabbitMQ broker with consumer queues
+func NewBrokerWithQueues(options Options, serializer core.Serializer, queues []string) *RabbitMQBroker {
+	return &RabbitMQBroker{
+		options:        options,
+		serializer:     serializer,
+		declaredQueues: make(map[string]bool),
+		consumerQueues: queues,
+		consumerTags:   make(map[string]string),
 	}
 }
 
@@ -168,36 +182,14 @@ func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, er
 		return nil, nil // No message available
 	}
 
-	// Create metadata
-	metadata := job.Metadata{
-		Queue:      queue,
-		EnqueuedAt: delivery.Timestamp,
-	}
-
-	if delivery.MessageId != "" {
-		metadata.ID = delivery.MessageId
-	}
-
-	// Deserialize job
-	j, err := r.serializer.Deserialize(delivery.Body, metadata)
-	if err != nil {
-		// Reject message if we can't deserialize it
-		if nackErr := delivery.Nack(false, false); nackErr != nil {
-			r.logError("Failed to nack message after deserialization error: %v", nackErr)
-		}
+	// Convert delivery to job using the shared method
+	job := r.convertDeliveryToJob(delivery, queue)
+	if job == nil {
 		return nil, errors.NewSerializationError(r.serializer.GetFormat(),
-			fmt.Errorf("deserialize job: %w", err))
+			fmt.Errorf("failed to convert delivery to job"))
 	}
 
-	// Store delivery tag for ACK/NACK
-	// Always wrap in RMQJob
-	rmqJob := &RMQJob{
-		Job:         j,
-		deliveryTag: delivery.DeliveryTag,
-		channel:     channel,
-	}
-
-	return rmqJob, nil
+	return job, nil
 }
 
 // Ack acknowledges job completion
@@ -254,7 +246,7 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options c
 		return errors.NewBrokerError("create_queue", name, err)
 	}
 
-	r.queues[name] = true
+	r.declaredQueues[name] = true
 	return nil
 }
 
@@ -270,7 +262,7 @@ func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
 		return errors.NewBrokerError("delete_queue", name, err)
 	}
 
-	delete(r.queues, name)
+	delete(r.declaredQueues, name)
 	return nil
 }
 
@@ -318,7 +310,7 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 		return err
 	}
 
-	if r.queues[name] {
+	if r.declaredQueues[name] {
 		return nil // Already declared
 	}
 
@@ -335,7 +327,7 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 		return err
 	}
 
-	r.queues[name] = true
+	r.declaredQueues[name] = true
 	return nil
 }
 
@@ -344,6 +336,111 @@ func (r *RabbitMQBroker) logError(format string, args ...interface{}) {
 	if r.logger != nil {
 		r.logger.Errorf(format, args...)
 	}
+}
+
+// Start implements the Poller interface for push-based consumption
+func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
+	r.logger.Infof("Starting RabbitMQ consumer for queues: %v", r.consumerQueues)
+
+	for _, queue := range r.consumerQueues {
+		if err := r.ensureQueue(queue); err != nil {
+			return fmt.Errorf("failed to ensure queue %s: %w", queue, err)
+		}
+
+		deliveries, err := r.channel.Consume(
+			queue, // queue
+			"",    // consumer tag (auto-generated)
+			false, // auto-ack
+			false, // exclusive
+			false, // no-local
+			false, // no-wait
+			nil,   // args
+		)
+		if err != nil {
+			return fmt.Errorf("failed to start consumer for queue %s: %w", queue, err)
+		}
+
+		// Store consumer tag for cleanup
+		if r.consumerTags == nil {
+			r.consumerTags = make(map[string]string)
+		}
+
+		go r.handleDeliveries(ctx, queue, deliveries, jobChan)
+	}
+
+	// Keep running until context is cancelled
+	<-ctx.Done()
+	r.logger.Info("RabbitMQ consumer stopped")
+	close(jobChan)
+	return nil
+}
+
+// handleDeliveries processes incoming messages from RabbitMQ
+func (r *RabbitMQBroker) handleDeliveries(ctx context.Context, queue string, deliveries <-chan amqp.Delivery, jobChan chan<- job.Job) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case delivery, ok := <-deliveries:
+			if !ok {
+				r.logger.Warnf("Delivery channel closed for queue %s", queue)
+				return
+			}
+
+			// Convert delivery to job
+			job := r.convertDeliveryToJob(delivery, queue)
+			if job != nil {
+				select {
+				case <-ctx.Done():
+					// Put job back on queue
+					if err := delivery.Nack(false, true); err != nil {
+						r.logger.Errorf("Failed to nack job during shutdown: %v", err)
+					}
+					return
+				case jobChan <- job:
+					r.logger.Debugf("Job sent to workers: %s", job.GetClass())
+				}
+			}
+		}
+	}
+}
+
+// convertDeliveryToJob converts an AMQP delivery to a Job
+func (r *RabbitMQBroker) convertDeliveryToJob(delivery amqp.Delivery, queue string) job.Job {
+	// Create metadata
+	metadata := job.Metadata{
+		Queue:      queue,
+		EnqueuedAt: delivery.Timestamp,
+	}
+
+	if delivery.MessageId != "" {
+		metadata.ID = delivery.MessageId
+	}
+
+	// Deserialize job
+	j, err := r.serializer.Deserialize(delivery.Body, metadata)
+	if err != nil {
+		// Reject message if we can't deserialize it
+		if nackErr := delivery.Nack(false, false); nackErr != nil {
+			r.logError("Failed to nack message after deserialization error: %v", nackErr)
+		}
+		r.logError("Failed to deserialize job: %v", err)
+		return nil
+	}
+
+	// Wrap in RMQJob for proper ACK/NACK handling
+	rmqJob := &RMQJob{
+		Job:         j,
+		deliveryTag: delivery.DeliveryTag,
+		channel:     r.channel,
+	}
+
+	return rmqJob
+}
+
+// SetConsumerQueues sets the queues that this broker will consume from
+func (r *RabbitMQBroker) SetConsumerQueues(queues []string) {
+	r.consumerQueues = queues
 }
 
 // RMQJob wraps a job with RabbitMQ-specific delivery information

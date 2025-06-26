@@ -76,7 +76,7 @@ func TestNewBroker(t *testing.T) {
 	require.NotNil(t, broker)
 	assert.Equal(t, options, broker.options)
 	assert.Equal(t, serializer, broker.serializer)
-	assert.NotNil(t, broker.queues)
+	assert.NotNil(t, broker.declaredQueues)
 }
 
 func TestRabbitMQBroker_Type(t *testing.T) {

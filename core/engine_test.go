@@ -23,7 +23,6 @@ func TestEngine_Start_Success(t *testing.T) {
 
 	err := engine.Start(ctx)
 	assert.NoError(t, err)
-	assert.NotNil(t, engine.poller)
 	assert.NotNil(t, engine.workerPool)
 
 	err = engine.Stop()

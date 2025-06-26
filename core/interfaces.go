@@ -81,6 +81,12 @@ type Registry interface {
 	Clear()
 }
 
+// Poller interface defines what core needs from a job poller/consumer
+type Poller interface {
+	// Start begins consuming jobs and sending them to the job channel
+	Start(ctx context.Context, jobChan chan<- job.Job) error
+}
+
 // Serializer interface defines what core needs from a serializer
 type Serializer interface {
 	// Serialize converts a job to bytes

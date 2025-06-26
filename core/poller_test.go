@@ -22,7 +22,7 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{"arg1"})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewPoller(broker, stats, queues, 100*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 100*time.Millisecond, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -30,7 +30,7 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 	// Start poller in goroutine
 	done := make(chan error, 1)
 	go func() {
-		done <- poller.Start(ctx)
+		done <- poller.Start(ctx, jobChan)
 	}()
 
 	// Should receive the job
@@ -61,7 +61,7 @@ func TestPoller_Start_NoJobs(t *testing.T) {
 	// Configure broker to return nil (no jobs)
 	broker.SetShouldReturnNilOnDequeue(true)
 
-	poller := NewPoller(broker, stats, queues, 50*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -69,7 +69,7 @@ func TestPoller_Start_NoJobs(t *testing.T) {
 	// Start poller in goroutine
 	done := make(chan error, 1)
 	go func() {
-		done <- poller.Start(ctx)
+		done <- poller.Start(ctx, jobChan)
 	}()
 
 	// Should not receive any jobs
@@ -106,14 +106,14 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 	broker.AddJobToQueue("queue2", job2)
 	broker.AddJobToQueue("queue3", job3)
 
-	poller := NewPoller(broker, stats, queues, 50*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	// Start poller in goroutine
 	go func() {
-		_ = poller.Start(ctx)
+		_ = poller.Start(ctx, jobChan)
 	}()
 
 	// Should receive all jobs
@@ -147,13 +147,13 @@ func TestPoller_Start_DequeueError(t *testing.T) {
 	// Configure broker to return error
 	broker.SetDequeueError(errors.New("dequeue failed"))
 
-	poller := NewPoller(broker, stats, queues, 50*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	// Start poller - should handle errors gracefully
-	err := poller.Start(ctx)
+	err := poller.Start(ctx, jobChan)
 	assert.NoError(t, err)
 }
 
@@ -169,14 +169,14 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewPoller(broker, stats, queues, 10*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 10*time.Millisecond, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Start poller in goroutine
 	done := make(chan error, 1)
 	go func() {
-		done <- poller.Start(ctx)
+		done <- poller.Start(ctx, jobChan)
 	}()
 
 	// Wait for poller to poll the job and try to send it (will block on unbuffered channel)
@@ -202,10 +202,9 @@ func TestPoller_getQueueOrder_Random(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	logger := seelog.Disabled
-	jobChan := make(chan job.Job, 10)
 	queues := []string{"queue1", "queue2", "queue3", "queue4", "queue5"}
 
-	poller := NewPoller(broker, stats, queues, time.Second, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, time.Second, logger)
 	poller.SetStrictOrder(false)
 
 	// Get multiple orders and check that they're shuffled
@@ -234,14 +233,13 @@ func TestPoller_pollOnce_Error(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	logger := seelog.Disabled
-	jobChan := make(chan job.Job, 10)
 	queues := []string{"error-queue"}
 
 	// Configure broker to return error
 	testError := errors.New("dequeue error")
 	broker.SetDequeueError(testError)
 
-	poller := NewPoller(broker, stats, queues, time.Second, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, time.Second, logger)
 
 	ctx := context.Background()
 	job, err := poller.pollOnce(ctx)
@@ -266,14 +264,14 @@ func TestPoller_Start_ChannelBlocked(t *testing.T) {
 		broker.AddJobToQueue("test-queue", testJob)
 	}
 
-	poller := NewPoller(broker, stats, queues, 50*time.Millisecond, jobChan, logger)
+	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	// Start poller in goroutine
 	go func() {
-		_ = poller.Start(ctx)
+		_ = poller.Start(ctx, jobChan)
 	}()
 
 	// Fill the channel buffer
