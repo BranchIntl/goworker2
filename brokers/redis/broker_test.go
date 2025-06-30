@@ -84,20 +84,6 @@ func TestRedisBroker_Type(t *testing.T) {
 	assert.Equal(t, "redis", broker.Type())
 }
 
-func TestRedisBroker_Capabilities(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	capabilities := broker.Capabilities()
-
-	expected := core.BrokerCapabilities{
-		SupportsAck:        false,
-		SupportsDelay:      false,
-		SupportsPriority:   false,
-		SupportsDeadLetter: false,
-	}
-
-	assert.Equal(t, expected, capabilities)
-}
-
 func TestRedisBroker_Connect_InvalidURI(t *testing.T) {
 	tests := []struct {
 		name string

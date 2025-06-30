@@ -84,20 +84,6 @@ func TestRabbitMQBroker_Type(t *testing.T) {
 	assert.Equal(t, "rabbitmq", broker.Type())
 }
 
-func TestRabbitMQBroker_Capabilities(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	capabilities := broker.Capabilities()
-
-	expected := core.BrokerCapabilities{
-		SupportsAck:        true,
-		SupportsDelay:      true,
-		SupportsPriority:   true,
-		SupportsDeadLetter: true,
-	}
-
-	assert.Equal(t, expected, capabilities)
-}
-
 func TestRabbitMQBroker_Connect_InvalidURI(t *testing.T) {
 	tests := []struct {
 		name string

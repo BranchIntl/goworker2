@@ -82,16 +82,6 @@ func (r *RedisBroker) Type() string {
 	return "redis"
 }
 
-// Capabilities returns Redis broker capabilities
-func (r *RedisBroker) Capabilities() core.BrokerCapabilities {
-	return core.BrokerCapabilities{
-		SupportsAck:        false, // Redis doesn't have built-in ACK
-		SupportsDelay:      false, // Could be implemented with sorted sets
-		SupportsPriority:   false, // Could be implemented with multiple queues
-		SupportsDeadLetter: false, // Could be implemented
-	}
-}
-
 // Enqueue adds a job to the queue
 func (r *RedisBroker) Enqueue(ctx context.Context, j job.Job) error {
 	if r.pool == nil {

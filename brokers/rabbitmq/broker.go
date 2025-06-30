@@ -103,16 +103,6 @@ func (r *RabbitMQBroker) Type() string {
 	return "rabbitmq"
 }
 
-// Capabilities returns RabbitMQ broker capabilities
-func (r *RabbitMQBroker) Capabilities() core.BrokerCapabilities {
-	return core.BrokerCapabilities{
-		SupportsAck:        true, // RabbitMQ supports ACK/NACK
-		SupportsDelay:      true, // Can be implemented with delayed exchange plugin
-		SupportsPriority:   true, // RabbitMQ supports message priority
-		SupportsDeadLetter: true, // RabbitMQ supports dead letter exchanges
-	}
-}
-
 // Enqueue adds a job to the queue
 func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	channel, err := r.getChannel()

@@ -20,20 +20,13 @@ type Broker interface {
 	Ack(ctx context.Context, job job.Job) error
 	Nack(ctx context.Context, job job.Job, requeue bool) error
 
-	// Queue management
-	CreateQueue(ctx context.Context, name string, options QueueOptions) error
-	DeleteQueue(ctx context.Context, name string) error
-	QueueExists(ctx context.Context, name string) (bool, error)
+	// Queue introspection
 	QueueLength(ctx context.Context, name string) (int64, error)
 
 	// Connection management
 	Connect(ctx context.Context) error
 	Close() error
 	Health() error
-
-	// Broker-specific info
-	Type() string
-	Capabilities() BrokerCapabilities
 }
 
 // Statistics interface defines what core needs from a statistics backend
@@ -66,15 +59,6 @@ type Registry interface {
 
 	// Get retrieves a worker function by class
 	Get(class string) (WorkerFunc, bool)
-
-	// List returns all registered classes
-	List() []string
-
-	// Remove unregisters a worker function
-	Remove(class string) error
-
-	// Clear removes all registered workers
-	Clear()
 }
 
 // Poller interface defines what core needs from a job poller/consumer
@@ -100,14 +84,6 @@ type Serializer interface {
 }
 
 // Supporting types used by the interfaces
-
-// BrokerCapabilities describes what features a broker supports
-type BrokerCapabilities struct {
-	SupportsAck        bool
-	SupportsDelay      bool
-	SupportsPriority   bool
-	SupportsDeadLetter bool
-}
 
 // QueueOptions for queue creation
 type QueueOptions struct {

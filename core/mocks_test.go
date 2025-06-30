@@ -24,7 +24,6 @@ type MockBroker struct {
 	queueLengthError         error
 	queues                   map[string][]job.Job
 	queueLengths             map[string]int64
-	capabilities             BrokerCapabilities
 	enqueuedJobs             []job.Job
 	ackedJobs                []job.Job
 	nackedJobs               []job.Job
@@ -35,12 +34,6 @@ func NewMockBroker() *MockBroker {
 	return &MockBroker{
 		queues:       make(map[string][]job.Job),
 		queueLengths: make(map[string]int64),
-		capabilities: BrokerCapabilities{
-			SupportsAck:        true,
-			SupportsDelay:      true,
-			SupportsPriority:   true,
-			SupportsDeadLetter: true,
-		},
 		enqueuedJobs: make([]job.Job, 0),
 		ackedJobs:    make([]job.Job, 0),
 		nackedJobs:   make([]job.Job, 0),
@@ -118,34 +111,6 @@ func (m *MockBroker) Nack(ctx context.Context, jobArg job.Job, requeue bool) err
 	return nil
 }
 
-func (m *MockBroker) CreateQueue(ctx context.Context, name string, options QueueOptions) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.queues[name] == nil {
-		m.queues[name] = make([]job.Job, 0)
-		m.queueLengths[name] = 0
-	}
-	return nil
-}
-
-func (m *MockBroker) DeleteQueue(ctx context.Context, name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.queues, name)
-	delete(m.queueLengths, name)
-	return nil
-}
-
-func (m *MockBroker) QueueExists(ctx context.Context, name string) (bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	_, exists := m.queues[name]
-	return exists, nil
-}
-
 func (m *MockBroker) QueueLength(ctx context.Context, name string) (int64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -190,14 +155,6 @@ func (m *MockBroker) Health() error {
 	}
 
 	return nil
-}
-
-func (m *MockBroker) Type() string {
-	return "mock"
-}
-
-func (m *MockBroker) Capabilities() BrokerCapabilities {
-	return m.capabilities
 }
 
 // Test helpers
