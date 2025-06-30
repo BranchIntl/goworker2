@@ -16,11 +16,10 @@ import (
 
 // Engine is the main orchestration engine
 type Engine struct {
-	broker     Broker
-	stats      Statistics
-	registry   Registry
-	serializer Serializer
-	config     *Config
+	broker   Broker
+	stats    Statistics
+	registry Registry
+	config   *Config
 
 	workerPool *WorkerPool
 
@@ -34,7 +33,6 @@ func NewEngine(
 	broker Broker,
 	stats Statistics,
 	registry Registry,
-	serializer Serializer,
 	options ...EngineOption,
 ) *Engine {
 	config := defaultConfig()
@@ -43,11 +41,10 @@ func NewEngine(
 	}
 
 	return &Engine{
-		broker:     broker,
-		stats:      stats,
-		registry:   registry,
-		serializer: serializer,
-		config:     config,
+		broker:   broker,
+		stats:    stats,
+		registry: registry,
+		config:   config,
 	}
 }
 
@@ -73,7 +70,6 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.workerPool = NewWorkerPool(
 		e.registry,
 		e.stats,
-		e.serializer,
 		e.config.Concurrency,
 		jobChan,
 		e.broker,

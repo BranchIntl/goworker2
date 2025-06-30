@@ -61,7 +61,6 @@ func main() {
 		broker,
 		stats,
 		reg,
-		serializer,
 		core.WithConcurrency(5),
 		core.WithShutdownTimeout(45*time.Second),
 		core.WithJobBufferSize(50),

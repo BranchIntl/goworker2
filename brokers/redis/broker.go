@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
 	"github.com/BranchIntl/goworker2/job"
@@ -14,16 +13,22 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
+type Serializer interface {
+	Serialize(j job.Job) ([]byte, error)
+	Deserialize(data []byte, metadata job.Metadata) (job.Job, error)
+	GetFormat() string
+}
+
 // RedisBroker implements the Broker interface for Redis
 type RedisBroker struct {
 	pool       *redis.Pool
 	namespace  string
 	options    Options
-	serializer core.Serializer
+	serializer Serializer
 }
 
 // NewBroker creates a new Redis broker
-func NewBroker(options Options, serializer core.Serializer) *RedisBroker {
+func NewBroker(options Options, serializer Serializer) *RedisBroker {
 	return &RedisBroker{
 		namespace:  options.Namespace,
 		options:    options,
@@ -177,12 +182,6 @@ func (r *RedisBroker) Nack(ctx context.Context, j job.Job, requeue bool) error {
 
 	// Requeue the job
 	return r.Enqueue(ctx, j)
-}
-
-// CreateQueue creates a new queue (no-op for Redis)
-func (r *RedisBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
-	// Redis queues are created on-demand
-	return nil
 }
 
 // DeleteQueue deletes a queue

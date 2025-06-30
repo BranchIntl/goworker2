@@ -88,7 +88,6 @@ func NewResqueEngine(options ResqueOptions) *ResqueEngine {
 		broker,
 		stats,
 		registry,
-		serializer,
 		options.EngineOptions...,
 	)
 

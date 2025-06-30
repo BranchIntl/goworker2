@@ -66,7 +66,6 @@ func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
 		broker,
 		stats,
 		registry,
-		serializer,
 		options.EngineOptions...,
 	)
 

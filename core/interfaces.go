@@ -86,38 +86,6 @@ type Registry interface {
 	Get(class string) (WorkerFunc, bool)
 }
 
-// Serializer interface defines what core needs from a serializer
-type Serializer interface {
-	// Serialize converts a job to bytes
-	Serialize(job job.Job) ([]byte, error)
-
-	// Deserialize converts bytes to a job
-	Deserialize(data []byte, metadata job.Metadata) (job.Job, error)
-
-	// GetFormat returns the serialization format name
-	GetFormat() string
-
-	// UseNumber determines if numbers should be decoded as json.Number
-	UseNumber() bool
-
-	// SetUseNumber determines if numbers should be decoded as json.Number
-	SetUseNumber(useNumber bool)
-}
-
-// Supporting types used by the interfaces
-
-// QueueOptions for queue creation
-type QueueOptions struct {
-	// MaxRetries before moving to dead letter queue
-	MaxRetries int
-	// MessageTTL is how long a message can remain in queue
-	MessageTTL time.Duration
-	// VisibilityTimeout for message processing
-	VisibilityTimeout time.Duration
-	// DeadLetterQueue name for failed messages
-	DeadLetterQueue string
-}
-
 // WorkerInfo describes a worker
 type WorkerInfo struct {
 	ID       string

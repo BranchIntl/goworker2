@@ -6,24 +6,45 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+// Serializer interface for serializing and deserializing jobs
+type Serializer interface {
+	// Serialize converts a job to bytes
+	Serialize(j job.Job) ([]byte, error)
+	// Deserialize converts bytes to a job
+	Deserialize(data []byte, metadata job.Metadata) (job.Job, error)
+	// GetFormat returns the serialization format name
+	GetFormat() string
+}
+
+// QueueOptions for queue creation
+type QueueOptions struct {
+	// MaxRetries before moving to dead letter queue
+	MaxRetries int
+	// MessageTTL is how long a message can remain in queue
+	MessageTTL time.Duration
+	// VisibilityTimeout for message processing
+	VisibilityTimeout time.Duration
+	// DeadLetterQueue name for failed messages
+	DeadLetterQueue string
+}
 
 // RabbitMQBroker implements the Broker interface for RabbitMQ
 type RabbitMQBroker struct {
 	connection     *amqp.Connection
 	channel        *amqp.Channel
 	options        Options
-	serializer     core.Serializer
+	serializer     Serializer
 	declaredQueues map[string]bool   // Track declared queues
 	consumerTags   map[string]string // Track consumer tags
 }
 
 // NewBroker creates a new RabbitMQ broker
-func NewBroker(options Options, serializer core.Serializer) *RabbitMQBroker {
+func NewBroker(options Options, serializer Serializer) *RabbitMQBroker {
 	return &RabbitMQBroker{
 		options:        options,
 		serializer:     serializer,
@@ -149,7 +170,7 @@ func (r *RabbitMQBroker) Nack(ctx context.Context, j job.Job, requeue bool) erro
 }
 
 // CreateQueue creates a new queue
-func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
+func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options QueueOptions) error {
 	channel, err := r.getChannel()
 	if err != nil {
 		return err

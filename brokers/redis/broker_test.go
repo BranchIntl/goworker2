@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
 	"github.com/stretchr/testify/assert"
@@ -40,9 +39,7 @@ func (m *mockSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Jo
 	}, nil
 }
 
-func (m *mockSerializer) GetFormat() string           { return m.format }
-func (m *mockSerializer) UseNumber() bool             { return m.useNumber }
-func (m *mockSerializer) SetUseNumber(useNumber bool) { m.useNumber = useNumber }
+func (m *mockSerializer) GetFormat() string { return m.format }
 
 // mockJob is a simple job implementation for testing
 type mockJob struct {
@@ -207,15 +204,6 @@ func TestRedisBroker_Nack(t *testing.T) {
 		// Should fail because Enqueue will fail when not connected
 		assert.ErrorIs(t, err, errors.ErrNotConnected)
 	})
-}
-
-func TestRedisBroker_CreateQueue(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	ctx := context.Background()
-
-	// CreateQueue is a no-op for Redis
-	err := broker.CreateQueue(ctx, "test_queue", core.QueueOptions{})
-	assert.NoError(t, err)
 }
 
 func TestRedisBroker_Start_NotConnected(t *testing.T) {

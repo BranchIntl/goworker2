@@ -30,7 +30,6 @@ func TestWorkerPool_Start_Basic(t *testing.T) {
 func TestWorkerPool_Start_JobProcessing(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
@@ -43,7 +42,7 @@ func TestWorkerPool_Start_JobProcessing(t *testing.T) {
 		return nil
 	})
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Send some jobs
 	job1 := NewMockJob("TestJob", "queue1", []interface{}{"job1"})
@@ -77,7 +76,6 @@ func TestWorkerPool_Start_JobProcessing(t *testing.T) {
 func TestWorkerPool_Start_ConcurrentJobProcessing(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
@@ -107,7 +105,7 @@ func TestWorkerPool_Start_ConcurrentJobProcessing(t *testing.T) {
 		return nil
 	})
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Send multiple jobs
 	numJobs := 5
@@ -137,7 +135,6 @@ func TestWorkerPool_Start_ConcurrentJobProcessing(t *testing.T) {
 func TestWorkerPool_Start_ContextCancellation(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
@@ -151,7 +148,7 @@ func TestWorkerPool_Start_ContextCancellation(t *testing.T) {
 		return nil
 	})
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Send a job
 	job := NewMockJob("LongJob", "test-queue", []interface{}{})
@@ -189,13 +186,12 @@ func TestWorkerPool_Start_ContextCancellation(t *testing.T) {
 func TestWorkerPool_ActiveWorkers(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
 	concurrency := 3
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Initially no active workers
 	assert.Equal(t, 0, pool.ActiveWorkers())
@@ -250,13 +246,12 @@ func TestWorkerPool_ActiveWorkers(t *testing.T) {
 func TestWorkerPool_Start_ZeroConcurrency(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
 	concurrency := 0
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -274,13 +269,12 @@ func TestWorkerPool_Start_ZeroConcurrency(t *testing.T) {
 func TestWorkerPool_Start_LargeConcurrency(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
 	concurrency := 100
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -297,7 +291,6 @@ func TestWorkerPool_Start_LargeConcurrency(t *testing.T) {
 func TestWorkerPool_Start_MultipleJobTypes(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
@@ -314,7 +307,7 @@ func TestWorkerPool_Start_MultipleJobTypes(t *testing.T) {
 		return nil
 	})
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Send different job types
 	jobA1 := NewMockJob("JobA", "queue1", []interface{}{"a1"})
@@ -352,7 +345,6 @@ func TestWorkerPool_Start_MultipleJobTypes(t *testing.T) {
 func TestWorkerPool_Start_LongRunningJobs(t *testing.T) {
 	registry := NewMockRegistry()
 	stats := NewMockStatistics()
-	serializer := NewMockSerializer()
 
 	broker := NewMockBroker()
 	jobChan := make(chan job.Job, 10)
@@ -369,7 +361,7 @@ func TestWorkerPool_Start_LongRunningJobs(t *testing.T) {
 		return nil
 	})
 
-	pool := NewWorkerPool(registry, stats, serializer, concurrency, jobChan, broker)
+	pool := NewWorkerPool(registry, stats, concurrency, jobChan, broker)
 
 	// Send multiple long jobs
 	for i := 0; i < 4; i++ {

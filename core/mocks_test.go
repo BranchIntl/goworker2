@@ -488,56 +488,6 @@ func (m *MockRegistry) Clear() {
 	m.workers = make(map[string]WorkerFunc)
 }
 
-// MockSerializer implements the Serializer interface for testing
-type MockSerializer struct {
-	mu             sync.RWMutex
-	serializeErr   error
-	deserializeErr error
-	useNumber      bool
-}
-
-func NewMockSerializer() *MockSerializer {
-	return &MockSerializer{}
-}
-
-func (m *MockSerializer) Serialize(job job.Job) ([]byte, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.serializeErr != nil {
-		return nil, m.serializeErr
-	}
-
-	return []byte(fmt.Sprintf(`{"class":"%s","args":%v}`, job.GetClass(), job.GetArgs())), nil
-}
-
-func (m *MockSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Job, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.deserializeErr != nil {
-		return nil, m.deserializeErr
-	}
-
-	return NewMockJob("test", "default", []interface{}{"arg1", "arg2"}), nil
-}
-
-func (m *MockSerializer) GetFormat() string {
-	return "mock"
-}
-
-func (m *MockSerializer) UseNumber() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.useNumber
-}
-
-func (m *MockSerializer) SetUseNumber(useNumber bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.useNumber = useNumber
-}
-
 // MockJob implements the job.Job interface for testing
 type MockJob struct {
 	id         string

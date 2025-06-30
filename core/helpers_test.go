@@ -12,10 +12,9 @@ import (
 
 // TestSetup provides common test dependencies
 type TestSetup struct {
-	Broker     *MockBroker
-	Stats      *MockStatistics
-	Registry   *MockRegistry
-	Serializer *MockSerializer
+	Broker   *MockBroker
+	Stats    *MockStatistics
+	Registry *MockRegistry
 }
 
 // NewTestSetup creates a standard test setup with all mocks
@@ -27,10 +26,9 @@ func NewTestSetup() *TestSetup {
 	slog.SetDefault(logger)
 
 	return &TestSetup{
-		Broker:     NewMockBroker(),
-		Stats:      NewMockStatistics(),
-		Registry:   NewMockRegistry(),
-		Serializer: NewMockSerializer(),
+		Broker:   NewMockBroker(),
+		Stats:    NewMockStatistics(),
+		Registry: NewMockRegistry(),
 	}
 }
 
@@ -105,7 +103,7 @@ func (b *EngineBuilder) WithOptions(options ...EngineOption) *EngineBuilder {
 
 // Build creates the engine
 func (b *EngineBuilder) Build() *Engine {
-	return NewEngine(b.setup.Broker, b.setup.Stats, b.setup.Registry, b.setup.Serializer, b.options...)
+	return NewEngine(b.setup.Broker, b.setup.Stats, b.setup.Registry, b.options...)
 }
 
 // WorkerBuilder helps create workers for testing
@@ -157,8 +155,7 @@ func (b *WorkerPoolBuilder) WithConcurrency(concurrency int) *WorkerPoolBuilder 
 
 // Build creates the worker pool
 func (b *WorkerPoolBuilder) Build() *WorkerPool {
-	return NewWorkerPool(b.setup.Registry, b.setup.Stats, b.setup.Serializer,
-		b.concurrency, b.jobChan, b.setup.Broker)
+	return NewWorkerPool(b.setup.Registry, b.setup.Stats, b.concurrency, b.jobChan, b.setup.Broker)
 }
 
 // ErrorTestCase represents a common error test scenario

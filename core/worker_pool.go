@@ -14,7 +14,6 @@ import (
 type WorkerPool struct {
 	registry      Registry
 	stats         Statistics
-	serializer    Serializer
 	concurrency   int
 	jobChan       <-chan job.Job
 	activeWorkers int32
@@ -27,7 +26,6 @@ type WorkerPool struct {
 func NewWorkerPool(
 	registry Registry,
 	stats Statistics,
-	serializer Serializer,
 	concurrency int,
 	jobChan <-chan job.Job,
 	broker Broker,
@@ -35,7 +33,6 @@ func NewWorkerPool(
 	return &WorkerPool{
 		registry:    registry,
 		stats:       stats,
-		serializer:  serializer,
 		concurrency: concurrency,
 		jobChan:     jobChan,
 		workers:     make([]*Worker, 0, concurrency),

@@ -83,7 +83,6 @@
 //			broker,    // implements core.Broker
 //			stats,     // implements core.Statistics
 //			reg,       // implements core.Registry
-//			serializer, // implements core.Serializer
 //			core.WithConcurrency(10),
 //			core.WithShutdownTimeout(30*time.Second),
 //		)
