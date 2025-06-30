@@ -22,7 +22,6 @@ type Engine struct {
 	serializer Serializer
 	config     *Config
 
-	poller     *Poller
 	workerPool *WorkerPool
 
 	ctx    context.Context
@@ -61,6 +60,14 @@ func NewEngine(
 func (e *Engine) Start(ctx context.Context) error {
 	e.ctx, e.cancel = context.WithCancel(ctx)
 
+	// Set logger on broker
+	e.broker.SetLogger(e.logger)
+
+	// If broker implements SetConsumerQueues (for push-based consumption), set the queues
+	if setQueues, ok := e.broker.(interface{ SetConsumerQueues([]string) }); ok {
+		setQueues.SetConsumerQueues(e.config.Queues)
+	}
+
 	// Connect broker and statistics
 	if err := e.broker.Connect(e.ctx); err != nil {
 		return errors.NewConnectionError("",
@@ -75,15 +82,21 @@ func (e *Engine) Start(ctx context.Context) error {
 	// Create job channel
 	jobChan := make(chan job.Job, e.config.JobBufferSize)
 
-	// Create and start poller
-	e.poller = NewPoller(
-		e.broker,
-		e.stats,
-		e.config.Queues,
-		e.config.PollInterval,
-		jobChan,
-		e.logger,
-	)
+	// Check if broker implements Poller interface
+	var poller Poller
+	if brokerPoller, ok := e.broker.(Poller); ok {
+		// Broker can poll/consume directly
+		poller = brokerPoller
+	} else {
+		// Use StandardPoller wrapper for pull-based brokers
+		poller = NewStandardPoller(
+			e.broker,
+			e.stats,
+			e.config.Queues,
+			e.config.PollInterval,
+			e.logger,
+		)
+	}
 
 	// Create and start worker pool
 	e.workerPool = NewWorkerPool(
@@ -101,7 +114,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.wg.Add(2)
 	go func() {
 		defer e.wg.Done()
-		if err := e.poller.Start(e.ctx); err != nil {
+		if err := poller.Start(e.ctx, jobChan); err != nil {
 			e.logger.Errorf("Poller error: %v", err)
 		}
 	}()
