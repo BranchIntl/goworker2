@@ -53,12 +53,12 @@ func (p *StandardPoller) Start(ctx context.Context, jobChan chan<- job.Job) erro
 				select {
 				case jobChan <- job:
 					slog.Debug("Job sent to workers", "class", job.GetClass())
-				default:
-					// This should never happen with enough buffer
-					slog.Error("Job channel is full", "class", job.GetClass())
+				case <-ctx.Done():
+					// Context cancelled while sending, nack the job
 					if err := p.broker.Nack(ctx, job, true); err != nil {
-						slog.Error("Error requeueing job", "error", err)
+						slog.Error("Error requeueing job during shutdown", "error", err)
 					}
+					return nil
 				}
 			} else {
 				// No job found, wait before polling again
