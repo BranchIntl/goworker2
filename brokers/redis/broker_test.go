@@ -16,7 +16,6 @@ type mockSerializer struct {
 	serializeErr   error
 	deserializeErr error
 	format         string
-	useNumber      bool
 }
 
 func (m *mockSerializer) Serialize(j job.Job) ([]byte, error) {
