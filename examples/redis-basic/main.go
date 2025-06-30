@@ -19,10 +19,10 @@ func main() {
 	// Create a pre-configured Resque engine (Redis + Resque serializer + Resque stats)
 	options := engines.DefaultResqueOptions()
 	options.RedisURI = "redis://localhost:6379/"
+	options.Queues = []string{"myqueue"}
+	options.PollInterval = 5 * time.Second
 	options.EngineOptions = []core.EngineOption{
 		core.WithConcurrency(2),
-		core.WithQueues([]string{"myqueue"}),
-		core.WithPollInterval(5 * time.Second),
 	}
 
 	engine := engines.NewResqueEngine(options)

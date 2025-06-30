@@ -7,8 +7,6 @@ import (
 // Config holds engine configuration
 type Config struct {
 	Concurrency     int
-	Queues          []string
-	PollInterval    time.Duration
 	ShutdownTimeout time.Duration
 	JobBufferSize   int
 }
@@ -20,8 +18,6 @@ type EngineOption func(*Config)
 func defaultConfig() *Config {
 	return &Config{
 		Concurrency:     25,
-		Queues:          []string{},
-		PollInterval:    5 * time.Second,
 		ShutdownTimeout: 30 * time.Second,
 		JobBufferSize:   100,
 	}
@@ -31,20 +27,6 @@ func defaultConfig() *Config {
 func WithConcurrency(n int) EngineOption {
 	return func(c *Config) {
 		c.Concurrency = n
-	}
-}
-
-// WithQueues sets the queues to process
-func WithQueues(queues []string) EngineOption {
-	return func(c *Config) {
-		c.Queues = queues
-	}
-}
-
-// WithPollInterval sets the polling interval
-func WithPollInterval(d time.Duration) EngineOption {
-	return func(c *Config) {
-		c.PollInterval = d
 	}
 }
 

@@ -32,6 +32,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 	
 	"github.com/BranchIntl/goworker2/engines"
 )
@@ -42,7 +43,11 @@ func emailJob(queue string, args ...interface{}) error {
 }
 
 func main() {
-	engine := engines.NewResqueEngine(engines.DefaultResqueOptions())
+	options := engines.DefaultResqueOptions()
+	options.Queues = []string{"email", "default"}
+	options.PollInterval = 3 * time.Second
+	
+	engine := engines.NewResqueEngine(options)
 	engine.Register("EmailJob", emailJob)
 	
 	if err := engine.Run(context.Background()); err != nil {
@@ -68,7 +73,10 @@ func imageProcessor(queue string, args ...interface{}) error {
 }
 
 func main() {
-	engine := engines.NewSneakersEngine(engines.DefaultSneakersOptions())
+	options := engines.DefaultSneakersOptions()
+	options.Queues = []string{"images", "default"}
+	
+	engine := engines.NewSneakersEngine(options)
 	engine.Register("ImageProcessor", imageProcessor)
 	
 	if err := engine.Run(context.Background()); err != nil {
@@ -97,8 +105,14 @@ import (
 )
 
 func main() {
+	// Configure broker with queues
+	brokerOpts := redis.DefaultOptions()
+	brokerOpts.Queues = []string{"critical", "default"}
+	brokerOpts.PollInterval = 5 * time.Second
+	
 	// Create components
-	broker := redis.NewBroker(redis.DefaultOptions(), resque.NewSerializer())
+	serializer := resque.NewSerializer()
+	broker := redis.NewBroker(brokerOpts, serializer)
 	stats := resque.NewStatistics(resque.DefaultOptions())
 	registry := registry.NewRegistry()
 	
@@ -107,10 +121,10 @@ func main() {
 		broker,
 		stats,
 		registry,
-		resque.NewSerializer(),
+		serializer,
 		core.WithConcurrency(10),
-		core.WithQueues([]string{"critical", "default"}),
-		core.WithPollInterval(5*time.Second),
+		core.WithShutdownTimeout(30*time.Second),
+		core.WithJobBufferSize(200),
 	)
 	
 	// Register workers
@@ -144,18 +158,17 @@ goworker2 uses a modular architecture with dependency injection:
 ┌─────────────────┐
 │     Engine      │  ← Orchestrates components
 ├─────────────────┤
-│   Broker        │  ← Queue backend (Redis/RabbitMQ)
+│   Broker        │  ← Queue backend with job consumption
 │   Statistics    │  ← Metrics and monitoring
 │   Registry      │  ← Worker function registry
 │   Serializer    │  ← Job serialization format
 │   WorkerPool    │  ← Manages concurrent workers
-│   Poller        │  ← Polls queues for jobs
 └─────────────────┘
 ```
 
 ### Components
 
-- **Broker**: Handles queue operations (enqueue, dequeue, ack/nack)
+- **Broker**: Handles queue operations and job consumption (enqueue, ack/nack, polling/pushing)
 - **Statistics**: Records metrics and worker information
 - **Registry**: Maps job classes to worker functions
 - **Serializer**: Converts jobs to/from bytes
@@ -176,8 +189,6 @@ See [`engines/`](engines/) directory for detailed engine documentation.
 engine := core.NewEngine(
 	broker, stats, registry, serializer,
 	core.WithConcurrency(25),                    // Number of workers
-	core.WithQueues([]string{"high", "low"}),    // Queue names
-	core.WithPollInterval(5*time.Second),        // Polling frequency
 	core.WithShutdownTimeout(30*time.Second),    // Graceful shutdown timeout
 	core.WithJobBufferSize(100),                 // Job channel buffer
 )
@@ -190,6 +201,8 @@ engine := core.NewEngine(
 options := redis.DefaultOptions()
 options.URI = "redis://localhost:6379/"
 options.Namespace = "jobs:"
+options.Queues = []string{"high", "low"}        // Queues to consume from
+options.PollInterval = 5 * time.Second          // Polling frequency
 options.MaxConnections = 10
 ```
 
@@ -198,6 +211,7 @@ options.MaxConnections = 10
 options := rabbitmq.DefaultOptions()
 options.URI = "amqp://guest:guest@localhost:5672/"
 options.Exchange = "jobs"
+options.Queues = []string{"high", "low"}        // Queues to consume from
 options.PrefetchCount = 1
 ```
 

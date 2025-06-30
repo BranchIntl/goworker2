@@ -79,11 +79,6 @@ func TestNewBroker(t *testing.T) {
 	assert.NotNil(t, broker.declaredQueues)
 }
 
-func TestRabbitMQBroker_Type(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	assert.Equal(t, "rabbitmq", broker.Type())
-}
-
 func TestRabbitMQBroker_Connect_InvalidURI(t *testing.T) {
 	tests := []struct {
 		name string
@@ -218,13 +213,27 @@ func TestRabbitMQBroker_Enqueue_NotConnected(t *testing.T) {
 	assert.ErrorIs(t, err, errors.ErrNotConnected)
 }
 
-func TestRabbitMQBroker_Dequeue_NotConnected(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
+func TestRabbitMQBroker_Start_NotConnected(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{"test_queue"}
+	broker := NewBroker(options, &mockSerializer{})
 	ctx := context.Background()
+	jobChan := make(chan job.Job, 10)
 
-	job, err := broker.Dequeue(ctx, "test_queue")
+	err := broker.Start(ctx, jobChan)
 	assert.ErrorIs(t, err, errors.ErrNotConnected)
-	assert.Nil(t, job)
+}
+
+func TestRabbitMQBroker_Start_EmptyQueues(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{}
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
+
+	err := broker.Start(ctx, jobChan)
+	assert.ErrorIs(t, err, errors.ErrNoQueues)
 }
 
 func TestRabbitMQBroker_SerializationError(t *testing.T) {

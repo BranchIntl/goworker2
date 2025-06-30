@@ -31,6 +31,8 @@ func main() {
 	brokerOpts := redis.DefaultOptions()
 	brokerOpts.URI = "redis://localhost:6379/"
 	brokerOpts.Namespace = "resque:"
+	brokerOpts.Queues = []string{"critical", "default", "low"}
+	brokerOpts.PollInterval = 2 * time.Second
 	brokerOpts.MaxConnections = 20
 	brokerOpts.MaxIdle = 5
 	brokerOpts.ConnectTimeout = 15 * time.Second
@@ -59,8 +61,6 @@ func main() {
 		reg,
 		serializer,
 		core.WithConcurrency(10),
-		core.WithQueues([]string{"critical", "default", "low"}),
-		core.WithPollInterval(2*time.Second),
 		core.WithShutdownTimeout(30*time.Second),
 		core.WithJobBufferSize(200),
 	)

@@ -6,6 +6,7 @@ type Options struct {
 	PrefetchCount int
 	Exchange      string
 	ExchangeType  string
+	Queues        []string
 }
 
 // DefaultOptions returns default RabbitMQ options
@@ -15,5 +16,6 @@ func DefaultOptions() Options {
 		PrefetchCount: 1,
 		Exchange:      "activejob",
 		ExchangeType:  "direct",
+		Queues:        []string{},
 	}
 }

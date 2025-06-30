@@ -10,6 +10,7 @@ import (
 	"github.com/BranchIntl/goworker2/errors"
 	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/BranchIntl/goworker2/pollers"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -156,6 +157,11 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error
 	return j, nil
 }
 
+func (r *RedisBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
+	poller := pollers.NewStandardPoller(r, r.options.Queues, r.options.PollInterval)
+	return poller.Start(ctx, jobChan)
+}
+
 // Ack acknowledges job completion (no-op for Redis)
 func (r *RedisBroker) Ack(ctx context.Context, j job.Job) error {
 	// Redis doesn't have built-in ACK mechanism
@@ -218,6 +224,11 @@ func (r *RedisBroker) QueueExists(ctx context.Context, name string) (bool, error
 	}
 
 	return exists, nil
+}
+
+// Queues returns the list of queues
+func (r *RedisBroker) Queues() []string {
+	return r.options.Queues
 }
 
 // QueueLength returns the number of jobs in a queue

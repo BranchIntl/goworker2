@@ -110,17 +110,15 @@ func (b *EngineBuilder) Build() *Engine {
 
 // WorkerBuilder helps create workers for testing
 type WorkerBuilder struct {
-	setup  *TestSetup
-	id     string
-	queues []string
+	setup *TestSetup
+	id    string
 }
 
 // NewWorker starts building a test worker
 func (s *TestSetup) NewWorker() *WorkerBuilder {
 	return &WorkerBuilder{
-		setup:  s,
-		id:     "test-worker",
-		queues: []string{"test-queue"},
+		setup: s,
+		id:    "test-worker",
 	}
 }
 
@@ -130,57 +128,15 @@ func (b *WorkerBuilder) WithID(id string) *WorkerBuilder {
 	return b
 }
 
-// WithQueues sets the worker queues
-func (b *WorkerBuilder) WithQueues(queues []string) *WorkerBuilder {
-	b.queues = queues
-	return b
-}
-
 // Build creates the worker
 func (b *WorkerBuilder) Build() *Worker {
-	return NewWorker(b.id, b.queues, b.setup.Registry, b.setup.Stats, b.setup.Broker)
-}
-
-// PollerBuilder helps create pollers for testing
-type PollerBuilder struct {
-	setup    *TestSetup
-	queues   []string
-	interval time.Duration
-	jobChan  chan<- job.Job
-}
-
-// NewPoller starts building a test poller
-func (s *TestSetup) NewPoller(jobChan chan<- job.Job) *PollerBuilder {
-	return &PollerBuilder{
-		setup:    s,
-		queues:   []string{"test-queue"},
-		interval: 100 * time.Millisecond,
-		jobChan:  jobChan,
-	}
-}
-
-// WithQueues sets the poller queues
-func (b *PollerBuilder) WithQueues(queues []string) *PollerBuilder {
-	b.queues = queues
-	return b
-}
-
-// WithInterval sets the polling interval
-func (b *PollerBuilder) WithInterval(interval time.Duration) *PollerBuilder {
-	b.interval = interval
-	return b
-}
-
-// Build creates the poller
-func (b *PollerBuilder) Build() *StandardPoller {
-	return NewStandardPoller(b.setup.Broker, b.setup.Stats, b.queues, b.interval)
+	return NewWorker(b.id, b.setup.Registry, b.setup.Stats, b.setup.Broker)
 }
 
 // WorkerPoolBuilder helps create worker pools for testing
 type WorkerPoolBuilder struct {
 	setup       *TestSetup
 	concurrency int
-	queues      []string
 	jobChan     <-chan job.Job
 }
 
@@ -189,7 +145,6 @@ func (s *TestSetup) NewWorkerPool(jobChan <-chan job.Job) *WorkerPoolBuilder {
 	return &WorkerPoolBuilder{
 		setup:       s,
 		concurrency: 2,
-		queues:      []string{"test-queue"},
 		jobChan:     jobChan,
 	}
 }
@@ -200,16 +155,10 @@ func (b *WorkerPoolBuilder) WithConcurrency(concurrency int) *WorkerPoolBuilder 
 	return b
 }
 
-// WithQueues sets the worker pool queues
-func (b *WorkerPoolBuilder) WithQueues(queues []string) *WorkerPoolBuilder {
-	b.queues = queues
-	return b
-}
-
 // Build creates the worker pool
 func (b *WorkerPoolBuilder) Build() *WorkerPool {
 	return NewWorkerPool(b.setup.Registry, b.setup.Stats, b.setup.Serializer,
-		b.concurrency, b.queues, b.jobChan, b.setup.Broker)
+		b.concurrency, b.jobChan, b.setup.Broker)
 }
 
 // ErrorTestCase represents a common error test scenario

@@ -39,6 +39,7 @@ func main() {
 	brokerOpts.URI = "amqp://guest:guest@localhost:5672/"
 	brokerOpts.Exchange = "activejob"
 	brokerOpts.PrefetchCount = 2
+	brokerOpts.Queues = []string{"activejob", "images", "critical"}
 
 	// Create serializer
 	serializer := sneakers.NewSerializer()
@@ -62,8 +63,6 @@ func main() {
 		reg,
 		serializer,
 		core.WithConcurrency(5),
-		core.WithQueues([]string{"activejob", "images", "critical"}),
-		core.WithPollInterval(3*time.Second),
 		core.WithShutdownTimeout(45*time.Second),
 		core.WithJobBufferSize(50),
 	)
@@ -72,26 +71,8 @@ func main() {
 	reg.Register("MyClass", myFunc)
 	reg.Register("ImageProcessingJob", imageProcessingFunc)
 
-	// Create some queues with specific options
-	ctx := context.Background()
-	queueOpts := core.QueueOptions{
-		MessageTTL:      30 * time.Minute,
-		DeadLetterQueue: "failed",
-		MaxRetries:      3,
-	}
-
-	if err := broker.Connect(ctx); err != nil {
-		log.Fatal("Failed to connect broker:", err)
-	}
-
-	broker.CreateQueue(ctx, "activejob", queueOpts)
-	broker.CreateQueue(ctx, "images", queueOpts)
-	broker.CreateQueue(ctx, "critical", core.QueueOptions{
-		MessageTTL: 10 * time.Minute,
-		MaxRetries: 5,
-	})
-
 	// Start the engine manually for full control
+	ctx := context.Background()
 	if err := engine.Start(ctx); err != nil {
 		log.Fatal("Error starting engine:", err)
 	}

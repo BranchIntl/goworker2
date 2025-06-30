@@ -55,11 +55,6 @@ func NewEngine(
 func (e *Engine) Start(ctx context.Context) error {
 	e.ctx, e.cancel = context.WithCancel(ctx)
 
-	// If broker implements SetConsumerQueues (for push-based consumption), set the queues
-	if setQueues, ok := e.broker.(interface{ SetConsumerQueues([]string) }); ok {
-		setQueues.SetConsumerQueues(e.config.Queues)
-	}
-
 	// Connect broker and statistics
 	if err := e.broker.Connect(e.ctx); err != nil {
 		return errors.NewConnectionError("",
@@ -74,28 +69,12 @@ func (e *Engine) Start(ctx context.Context) error {
 	// Create job channel
 	jobChan := make(chan job.Job, e.config.JobBufferSize)
 
-	// Check if broker implements Poller interface
-	var poller Poller
-	if brokerPoller, ok := e.broker.(Poller); ok {
-		// Broker can poll/consume directly
-		poller = brokerPoller
-	} else {
-		// Use StandardPoller wrapper for pull-based brokers
-		poller = NewStandardPoller(
-			e.broker,
-			e.stats,
-			e.config.Queues,
-			e.config.PollInterval,
-		)
-	}
-
 	// Create and start worker pool
 	e.workerPool = NewWorkerPool(
 		e.registry,
 		e.stats,
 		e.serializer,
 		e.config.Concurrency,
-		e.config.Queues,
 		jobChan,
 		e.broker,
 	)
@@ -104,8 +83,8 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.wg.Add(2)
 	go func() {
 		defer e.wg.Done()
-		if err := poller.Start(e.ctx, jobChan); err != nil {
-			slog.Error("Poller error", "error", err)
+		if err := e.broker.Start(e.ctx, jobChan); err != nil {
+			slog.Error("Broker error", "error", err)
 		}
 	}()
 
@@ -155,7 +134,7 @@ func (e *Engine) Stop() error {
 // Health returns the current health status
 func (e *Engine) Health() HealthStatus {
 	queuedJobs := make(map[string]int64)
-	for _, queue := range e.config.Queues {
+	for _, queue := range e.broker.Queues() {
 		if length, err := e.broker.QueueLength(e.ctx, queue); err == nil {
 			queuedJobs[queue] = length
 		}
@@ -172,11 +151,6 @@ func (e *Engine) Health() HealthStatus {
 		QueuedJobs:    queuedJobs,
 		LastCheck:     time.Now(),
 	}
-}
-
-// Enqueue adds a job to the queue
-func (e *Engine) Enqueue(job job.Job) error {
-	return e.broker.Enqueue(e.ctx, job)
 }
 
 // Register adds a worker function

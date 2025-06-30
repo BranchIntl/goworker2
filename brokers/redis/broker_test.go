@@ -79,11 +79,6 @@ func TestNewBroker(t *testing.T) {
 	assert.Equal(t, serializer, broker.serializer)
 }
 
-func TestRedisBroker_Type(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	assert.Equal(t, "redis", broker.Type())
-}
-
 func TestRedisBroker_Connect_InvalidURI(t *testing.T) {
 	tests := []struct {
 		name string
@@ -221,6 +216,35 @@ func TestRedisBroker_CreateQueue(t *testing.T) {
 	// CreateQueue is a no-op for Redis
 	err := broker.CreateQueue(ctx, "test_queue", core.QueueOptions{})
 	assert.NoError(t, err)
+}
+
+func TestRedisBroker_Start_NotConnected(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{"test_queue"}
+	options.PollInterval = 100 * time.Millisecond
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
+
+	err := broker.Start(ctx, jobChan)
+	assert.ErrorIs(t, err, errors.ErrNotConnected)
+}
+
+func TestRedisBroker_Start_EmptyQueues(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{} // No queues
+	options.PollInterval = 100 * time.Millisecond
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
+
+	// Start should handle empty queues gracefully
+	err := broker.Start(ctx, jobChan)
+	// Since StandardPoller is used, it should handle empty queues by not polling
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, errors.ErrNoQueues)
 }
 
 func TestRedisBroker_SerializationError(t *testing.T) {

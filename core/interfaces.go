@@ -12,42 +12,67 @@ type WorkerFunc func(queue string, args ...interface{}) error
 
 // Broker interface defines what core needs from a queue broker
 type Broker interface {
-	// Queue operations
-	Enqueue(ctx context.Context, job job.Job) error
-	Dequeue(ctx context.Context, queue string) (job.Job, error)
+	// Start begins consuming jobs and sending them to the job channel
+	Start(ctx context.Context, jobChan chan<- job.Job) error
 
-	// Job lifecycle
+	// Acknowledge a job
 	Ack(ctx context.Context, job job.Job) error
+
+	// Negative acknowledge a job (retry or dead letter)
 	Nack(ctx context.Context, job job.Job, requeue bool) error
 
-	// Queue introspection
+	// Get the list of queues
+	Queues() []string
+
+	// Get the length of a queue
 	QueueLength(ctx context.Context, name string) (int64, error)
 
-	// Connection management
+	// Connect to the broker
 	Connect(ctx context.Context) error
+
+	// Close the broker
 	Close() error
+
+	// Health check the broker
 	Health() error
+
+	// Type returns the broker type
+	Type() string
 }
 
 // Statistics interface defines what core needs from a statistics backend
 type Statistics interface {
-	// Worker lifecycle
+	// Register a worker
 	RegisterWorker(ctx context.Context, worker WorkerInfo) error
+
+	// Unregister a worker
 	UnregisterWorker(ctx context.Context, workerID string) error
 
-	// Job metrics
+	// Record a job started
 	RecordJobStarted(ctx context.Context, job job.Job, worker WorkerInfo) error
+
+	// Record a job completed
 	RecordJobCompleted(ctx context.Context, job job.Job, worker WorkerInfo, duration time.Duration) error
+
+	// Record a job failed
 	RecordJobFailed(ctx context.Context, job job.Job, worker WorkerInfo, err error, duration time.Duration) error
 
-	// Statistics queries
+	// Get worker statistics
 	GetWorkerStats(ctx context.Context, workerID string) (WorkerStats, error)
+
+	// Get queue statistics
 	GetQueueStats(ctx context.Context, queue string) (QueueStats, error)
+
+	// Get global statistics
 	GetGlobalStats(ctx context.Context) (GlobalStats, error)
 
-	// Health and connection
+	// Connect to the statistics backend
 	Connect(ctx context.Context) error
+
+	// Close the statistics backend
 	Close() error
+
+	// Health check the statistics backend
 	Health() error
 	Type() string
 }
@@ -59,12 +84,6 @@ type Registry interface {
 
 	// Get retrieves a worker function by class
 	Get(class string) (WorkerFunc, bool)
-}
-
-// Poller interface defines what core needs from a job poller/consumer
-type Poller interface {
-	// Start begins consuming jobs and sending them to the job channel
-	Start(ctx context.Context, jobChan chan<- job.Job) error
 }
 
 // Serializer interface defines what core needs from a serializer
@@ -80,6 +99,8 @@ type Serializer interface {
 
 	// UseNumber determines if numbers should be decoded as json.Number
 	UseNumber() bool
+
+	// SetUseNumber determines if numbers should be decoded as json.Number
 	SetUseNumber(useNumber bool)
 }
 

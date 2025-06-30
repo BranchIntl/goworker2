@@ -17,7 +17,6 @@ type Worker struct {
 	id       string
 	hostname string
 	pid      int
-	queues   []string
 	registry Registry
 	stats    Statistics
 	broker   Broker
@@ -31,7 +30,6 @@ type Worker struct {
 // NewWorker creates a new worker
 func NewWorker(
 	id string,
-	queues []string,
 	registry Registry,
 	stats Statistics,
 	broker Broker,
@@ -42,7 +40,6 @@ func NewWorker(
 		id:        id,
 		hostname:  hostname,
 		pid:       os.Getpid(),
-		queues:    queues,
 		registry:  registry,
 		stats:     stats,
 		broker:    broker,
@@ -55,13 +52,6 @@ func (w *Worker) GetID() string {
 	return fmt.Sprintf("%s:%d-%s", w.hostname, w.pid, w.id)
 }
 
-// GetQueues returns the queues this worker processes.
-// Note: This is for informational purposes only (e.g., WorkerInfo reporting).
-// Workers receive jobs via channels from the Poller and don't poll queues directly.
-func (w *Worker) GetQueues() []string {
-	return w.queues
-}
-
 // Work starts processing jobs
 func (w *Worker) Work(ctx context.Context, jobs <-chan job.Job) error {
 	// Register worker
@@ -69,7 +59,7 @@ func (w *Worker) Work(ctx context.Context, jobs <-chan job.Job) error {
 		ID:       w.GetID(),
 		Hostname: w.hostname,
 		Pid:      w.pid,
-		Queues:   w.GetQueues(),
+		Queues:   w.broker.Queues(),
 		Started:  w.startTime,
 	}
 
@@ -108,7 +98,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 		ID:       w.GetID(),
 		Hostname: w.hostname,
 		Pid:      w.pid,
-		Queues:   w.GetQueues(),
+		Queues:   w.broker.Queues(),
 		Started:  w.startTime,
 	}
 
