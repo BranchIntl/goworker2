@@ -1,3 +1,8 @@
+// Package job defines the core job interface and related types for the goworker library.
+//
+// This package provides the fundamental Job interface that represents a unit of work
+// to be processed by workers, along with supporting types for job payloads and metadata.
+// All job implementations across different serializers must implement the Job interface.
 package job
 
 import "time"

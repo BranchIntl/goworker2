@@ -17,74 +17,89 @@ type MockBroker struct {
 	connected                bool
 	connectError             error
 	healthError              error
-	enqueueError             error
-	dequeueError             error
+	startError               error
 	ackError                 error
 	nackError                error
 	queueLengthError         error
 	queues                   map[string][]job.Job
 	queueLengths             map[string]int64
-	capabilities             BrokerCapabilities
-	enqueuedJobs             []job.Job
 	ackedJobs                []job.Job
 	nackedJobs               []job.Job
 	shouldReturnNilOnDequeue bool
+	startCalled              bool
 }
 
 func NewMockBroker() *MockBroker {
 	return &MockBroker{
 		queues:       make(map[string][]job.Job),
 		queueLengths: make(map[string]int64),
-		capabilities: BrokerCapabilities{
-			SupportsAck:        true,
-			SupportsDelay:      true,
-			SupportsPriority:   true,
-			SupportsDeadLetter: true,
-		},
-		enqueuedJobs: make([]job.Job, 0),
 		ackedJobs:    make([]job.Job, 0),
 		nackedJobs:   make([]job.Job, 0),
 	}
 }
 
-func (m *MockBroker) Enqueue(ctx context.Context, jobArg job.Job) error {
+// Start implements the Broker interface
+func (m *MockBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.enqueueError != nil {
-		return m.enqueueError
+	if m.startError != nil {
+		return m.startError
 	}
 
-	m.enqueuedJobs = append(m.enqueuedJobs, jobArg)
-	if m.queues[jobArg.GetQueue()] == nil {
-		m.queues[jobArg.GetQueue()] = make([]job.Job, 0)
-	}
-	m.queues[jobArg.GetQueue()] = append(m.queues[jobArg.GetQueue()], jobArg)
-	m.queueLengths[jobArg.GetQueue()]++
+	m.startCalled = true
+
+	// Simple mock implementation: send all queued jobs and then close the channel
+	go func() {
+		defer close(jobChan)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				// Try to get a job from any queue
+				job := m.getNextJob()
+				if job != nil {
+					select {
+					case jobChan <- job:
+						// Job sent successfully
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					// No jobs available, wait a bit before checking again
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(10 * time.Millisecond):
+						// Continue polling
+					}
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
-func (m *MockBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
+// getNextJob returns the next job from any queue (used internally by Start)
+func (m *MockBroker) getNextJob() job.Job {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.dequeueError != nil {
-		return nil, m.dequeueError
-	}
-
 	if m.shouldReturnNilOnDequeue {
-		return nil, nil
+		return nil
 	}
 
-	jobs, exists := m.queues[queue]
-	if !exists || len(jobs) == 0 {
-		return nil, nil
+	for queueName, jobs := range m.queues {
+		if len(jobs) > 0 {
+			job := jobs[0]
+			m.queues[queueName] = jobs[1:]
+			m.queueLengths[queueName]--
+			return job
+		}
 	}
-
-	job := jobs[0]
-	m.queues[queue] = jobs[1:]
-	m.queueLengths[queue]--
-	return job, nil
+	return nil
 }
 
 func (m *MockBroker) Ack(ctx context.Context, jobArg job.Job) error {
@@ -116,34 +131,6 @@ func (m *MockBroker) Nack(ctx context.Context, jobArg job.Job, requeue bool) err
 		m.queueLengths[jobArg.GetQueue()]++
 	}
 	return nil
-}
-
-func (m *MockBroker) CreateQueue(ctx context.Context, name string, options QueueOptions) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.queues[name] == nil {
-		m.queues[name] = make([]job.Job, 0)
-		m.queueLengths[name] = 0
-	}
-	return nil
-}
-
-func (m *MockBroker) DeleteQueue(ctx context.Context, name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.queues, name)
-	delete(m.queueLengths, name)
-	return nil
-}
-
-func (m *MockBroker) QueueExists(ctx context.Context, name string) (bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	_, exists := m.queues[name]
-	return exists, nil
 }
 
 func (m *MockBroker) QueueLength(ctx context.Context, name string) (int64, error) {
@@ -196,8 +183,15 @@ func (m *MockBroker) Type() string {
 	return "mock"
 }
 
-func (m *MockBroker) Capabilities() BrokerCapabilities {
-	return m.capabilities
+func (m *MockBroker) Queues() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	queues := make([]string, 0, len(m.queues))
+	for queue := range m.queues {
+		queues = append(queues, queue)
+	}
+	return queues
 }
 
 // Test helpers
@@ -213,22 +207,16 @@ func (m *MockBroker) SetHealthError(err error) {
 	m.healthError = err
 }
 
-func (m *MockBroker) SetDequeueError(err error) {
+func (m *MockBroker) SetStartError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.dequeueError = err
+	m.startError = err
 }
 
 func (m *MockBroker) SetShouldReturnNilOnDequeue(shouldReturn bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.shouldReturnNilOnDequeue = shouldReturn
-}
-
-func (m *MockBroker) GetEnqueuedJobs() []job.Job {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return append([]job.Job(nil), m.enqueuedJobs...)
 }
 
 func (m *MockBroker) GetAckedJobs() []job.Job {
@@ -252,6 +240,12 @@ func (m *MockBroker) AddJobToQueue(queue string, jobArg job.Job) {
 	}
 	m.queues[queue] = append(m.queues[queue], jobArg)
 	m.queueLengths[queue]++
+}
+
+func (m *MockBroker) IsStartCalled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.startCalled
 }
 
 // MockJobCall represents a job call for testing
@@ -492,56 +486,6 @@ func (m *MockRegistry) Clear() {
 	defer m.mu.Unlock()
 
 	m.workers = make(map[string]WorkerFunc)
-}
-
-// MockSerializer implements the Serializer interface for testing
-type MockSerializer struct {
-	mu             sync.RWMutex
-	serializeErr   error
-	deserializeErr error
-	useNumber      bool
-}
-
-func NewMockSerializer() *MockSerializer {
-	return &MockSerializer{}
-}
-
-func (m *MockSerializer) Serialize(job job.Job) ([]byte, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.serializeErr != nil {
-		return nil, m.serializeErr
-	}
-
-	return []byte(fmt.Sprintf(`{"class":"%s","args":%v}`, job.GetClass(), job.GetArgs())), nil
-}
-
-func (m *MockSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Job, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.deserializeErr != nil {
-		return nil, m.deserializeErr
-	}
-
-	return NewMockJob("test", "default", []interface{}{"arg1", "arg2"}), nil
-}
-
-func (m *MockSerializer) GetFormat() string {
-	return "mock"
-}
-
-func (m *MockSerializer) UseNumber() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.useNumber
-}
-
-func (m *MockSerializer) SetUseNumber(useNumber bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.useNumber = useNumber
 }
 
 // MockJob implements the job.Job interface for testing

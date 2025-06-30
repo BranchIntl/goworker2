@@ -6,40 +6,49 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// RabbitMQBroker implements the Broker and Poller interfaces for RabbitMQ
+// Serializer interface for serializing and deserializing jobs
+type Serializer interface {
+	// Serialize converts a job to bytes
+	Serialize(j job.Job) ([]byte, error)
+	// Deserialize converts bytes to a job
+	Deserialize(data []byte, metadata job.Metadata) (job.Job, error)
+	// GetFormat returns the serialization format name
+	GetFormat() string
+}
+
+// QueueOptions for queue creation
+type QueueOptions struct {
+	// MaxRetries before moving to dead letter queue
+	MaxRetries int
+	// MessageTTL is how long a message can remain in queue
+	MessageTTL time.Duration
+	// VisibilityTimeout for message processing
+	VisibilityTimeout time.Duration
+	// DeadLetterQueue name for failed messages
+	DeadLetterQueue string
+}
+
+// RabbitMQBroker implements the Broker interface for RabbitMQ
 type RabbitMQBroker struct {
 	connection     *amqp.Connection
 	channel        *amqp.Channel
 	options        Options
-	serializer     core.Serializer
+	serializer     Serializer
 	declaredQueues map[string]bool   // Track declared queues
-	consumerQueues []string          // Queues to consume from
 	consumerTags   map[string]string // Track consumer tags
 }
 
 // NewBroker creates a new RabbitMQ broker
-func NewBroker(options Options, serializer core.Serializer) *RabbitMQBroker {
+func NewBroker(options Options, serializer Serializer) *RabbitMQBroker {
 	return &RabbitMQBroker{
 		options:        options,
 		serializer:     serializer,
 		declaredQueues: make(map[string]bool),
-		consumerTags:   make(map[string]string),
-	}
-}
-
-// NewBrokerWithQueues creates a new RabbitMQ broker with consumer queues
-func NewBrokerWithQueues(options Options, serializer core.Serializer, queues []string) *RabbitMQBroker {
-	return &RabbitMQBroker{
-		options:        options,
-		serializer:     serializer,
-		declaredQueues: make(map[string]bool),
-		consumerQueues: queues,
 		consumerTags:   make(map[string]string),
 	}
 }
@@ -103,16 +112,6 @@ func (r *RabbitMQBroker) Type() string {
 	return "rabbitmq"
 }
 
-// Capabilities returns RabbitMQ broker capabilities
-func (r *RabbitMQBroker) Capabilities() core.BrokerCapabilities {
-	return core.BrokerCapabilities{
-		SupportsAck:        true, // RabbitMQ supports ACK/NACK
-		SupportsDelay:      true, // Can be implemented with delayed exchange plugin
-		SupportsPriority:   true, // RabbitMQ supports message priority
-		SupportsDeadLetter: true, // RabbitMQ supports dead letter exchanges
-	}
-}
-
 // Enqueue adds a job to the queue
 func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	channel, err := r.getChannel()
@@ -154,38 +153,6 @@ func (r *RabbitMQBroker) Enqueue(ctx context.Context, j job.Job) error {
 	return nil
 }
 
-// Dequeue retrieves a job from the queue
-func (r *RabbitMQBroker) Dequeue(ctx context.Context, queue string) (job.Job, error) {
-	channel, err := r.getChannel()
-	if err != nil {
-		return nil, err
-	}
-
-	// Ensure queue exists
-	if err := r.ensureQueue(queue); err != nil {
-		return nil, errors.NewBrokerError("ensure_queue", queue, err)
-	}
-
-	// Get a single message
-	delivery, ok, err := channel.Get(queue, false) // Don't auto-ack
-	if err != nil {
-		return nil, errors.NewBrokerError("dequeue", queue, err)
-	}
-
-	if !ok {
-		return nil, nil // No message available
-	}
-
-	// Convert delivery to job using the shared method
-	job := r.convertDeliveryToJob(delivery, queue)
-	if job == nil {
-		return nil, errors.NewSerializationError(r.serializer.GetFormat(),
-			fmt.Errorf("failed to convert delivery to job"))
-	}
-
-	return job, nil
-}
-
 // Ack acknowledges job completion
 func (r *RabbitMQBroker) Ack(ctx context.Context, j job.Job) error {
 	if rmqJob, ok := j.(*RMQJob); ok && rmqJob.deliveryTag > 0 {
@@ -203,7 +170,7 @@ func (r *RabbitMQBroker) Nack(ctx context.Context, j job.Job, requeue bool) erro
 }
 
 // CreateQueue creates a new queue
-func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
+func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options QueueOptions) error {
 	channel, err := r.getChannel()
 	if err != nil {
 		return err
@@ -275,6 +242,11 @@ func (r *RabbitMQBroker) QueueExists(ctx context.Context, name string) (bool, er
 	return true, nil
 }
 
+// Queues returns the list of queues
+func (r *RabbitMQBroker) Queues() []string {
+	return r.options.Queues
+}
+
 // QueueLength returns the number of jobs in a queue
 func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, error) {
 	channel, err := r.getChannel()
@@ -325,11 +297,14 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 	return nil
 }
 
-// Start implements the Poller interface for push-based consumption
+// Start begins consuming jobs and sending them to the job channel
 func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
-	slog.Info("Starting RabbitMQ consumer", "queues", r.consumerQueues)
+	slog.Info("Starting RabbitMQ consumer", "queues", r.options.Queues)
+	if len(r.options.Queues) == 0 {
+		return errors.ErrNoQueues
+	}
 
-	for _, queue := range r.consumerQueues {
+	for _, queue := range r.options.Queues {
 		if err := r.ensureQueue(queue); err != nil {
 			return fmt.Errorf("failed to ensure queue %s: %w", queue, err)
 		}
@@ -423,11 +398,6 @@ func (r *RabbitMQBroker) convertDeliveryToJob(delivery amqp.Delivery, queue stri
 	}
 
 	return rmqJob
-}
-
-// SetConsumerQueues sets the queues that this broker will consume from
-func (r *RabbitMQBroker) SetConsumerQueues(queues []string) {
-	r.consumerQueues = queues
 }
 
 // RMQJob wraps a job with RabbitMQ-specific delivery information

@@ -6,23 +6,29 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	redisUtils "github.com/BranchIntl/goworker2/internal/redis"
 	"github.com/BranchIntl/goworker2/job"
+	"github.com/BranchIntl/goworker2/pollers"
 	"github.com/gomodule/redigo/redis"
 )
+
+type Serializer interface {
+	Serialize(j job.Job) ([]byte, error)
+	Deserialize(data []byte, metadata job.Metadata) (job.Job, error)
+	GetFormat() string
+}
 
 // RedisBroker implements the Broker interface for Redis
 type RedisBroker struct {
 	pool       *redis.Pool
 	namespace  string
 	options    Options
-	serializer core.Serializer
+	serializer Serializer
 }
 
 // NewBroker creates a new Redis broker
-func NewBroker(options Options, serializer core.Serializer) *RedisBroker {
+func NewBroker(options Options, serializer Serializer) *RedisBroker {
 	return &RedisBroker{
 		namespace:  options.Namespace,
 		options:    options,
@@ -80,16 +86,6 @@ func (r *RedisBroker) Health() error {
 // Type returns the broker type
 func (r *RedisBroker) Type() string {
 	return "redis"
-}
-
-// Capabilities returns Redis broker capabilities
-func (r *RedisBroker) Capabilities() core.BrokerCapabilities {
-	return core.BrokerCapabilities{
-		SupportsAck:        false, // Redis doesn't have built-in ACK
-		SupportsDelay:      false, // Could be implemented with sorted sets
-		SupportsPriority:   false, // Could be implemented with multiple queues
-		SupportsDeadLetter: false, // Could be implemented
-	}
 }
 
 // Enqueue adds a job to the queue
@@ -166,6 +162,11 @@ func (r *RedisBroker) Dequeue(ctx context.Context, queue string) (job.Job, error
 	return j, nil
 }
 
+func (r *RedisBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
+	poller := pollers.NewStandardPoller(r, r.options.Queues, r.options.PollInterval)
+	return poller.Start(ctx, jobChan)
+}
+
 // Ack acknowledges job completion (no-op for Redis)
 func (r *RedisBroker) Ack(ctx context.Context, j job.Job) error {
 	// Redis doesn't have built-in ACK mechanism
@@ -181,12 +182,6 @@ func (r *RedisBroker) Nack(ctx context.Context, j job.Job, requeue bool) error {
 
 	// Requeue the job
 	return r.Enqueue(ctx, j)
-}
-
-// CreateQueue creates a new queue (no-op for Redis)
-func (r *RedisBroker) CreateQueue(ctx context.Context, name string, options core.QueueOptions) error {
-	// Redis queues are created on-demand
-	return nil
 }
 
 // DeleteQueue deletes a queue
@@ -228,6 +223,11 @@ func (r *RedisBroker) QueueExists(ctx context.Context, name string) (bool, error
 	}
 
 	return exists, nil
+}
+
+// Queues returns the list of queues
+func (r *RedisBroker) Queues() []string {
+	return r.options.Queues
 }
 
 // QueueLength returns the number of jobs in a queue

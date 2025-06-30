@@ -14,9 +14,7 @@ import (
 type WorkerPool struct {
 	registry      Registry
 	stats         Statistics
-	serializer    Serializer
 	concurrency   int
-	queues        []string
 	jobChan       <-chan job.Job
 	activeWorkers int32
 	workers       []*Worker
@@ -28,18 +26,14 @@ type WorkerPool struct {
 func NewWorkerPool(
 	registry Registry,
 	stats Statistics,
-	serializer Serializer,
 	concurrency int,
-	queues []string,
 	jobChan <-chan job.Job,
 	broker Broker,
 ) *WorkerPool {
 	return &WorkerPool{
 		registry:    registry,
 		stats:       stats,
-		serializer:  serializer,
 		concurrency: concurrency,
-		queues:      queues,
 		jobChan:     jobChan,
 		workers:     make([]*Worker, 0, concurrency),
 		broker:      broker,
@@ -54,7 +48,6 @@ func (wp *WorkerPool) Start(ctx context.Context) error {
 	for i := 0; i < wp.concurrency; i++ {
 		worker := NewWorker(
 			strconv.Itoa(i),
-			wp.queues,
 			wp.registry,
 			wp.stats,
 			wp.broker,

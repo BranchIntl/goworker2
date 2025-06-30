@@ -14,7 +14,6 @@ import (
 func TestEngine_Start_Success(t *testing.T) {
 	setup := NewTestSetup()
 	engine := setup.NewEngine().WithOptions(
-		WithQueues([]string{"test-queue"}),
 		WithConcurrency(2),
 	).Build()
 
@@ -64,8 +63,7 @@ func TestEngine_Stop_BeforeStart(t *testing.T) {
 func TestEngine_Stop_AfterStart(t *testing.T) {
 	setup := NewTestSetup()
 	engine := setup.NewEngine().WithOptions(
-		WithQueues([]string{"test-queue"}),
-		WithShutdownTimeout(100*time.Millisecond),
+		WithShutdownTimeout(100 * time.Millisecond),
 	).Build()
 
 	ctx, cancel := ContextWithCustomTimeout(t, 200*time.Millisecond)
@@ -82,11 +80,12 @@ func TestEngine_Health_Healthy(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"queue1", "queue2"}),
-	)
+	// Add some jobs to queues so the broker knows about them
+	broker.AddJobToQueue("queue1", NewMockJob("TestJob", "queue1", []interface{}{}))
+	broker.AddJobToQueue("queue2", NewMockJob("TestJob", "queue2", []interface{}{}))
+
+	engine := NewEngine(broker, stats, registry)
 
 	ctx := context.Background()
 	err := engine.Start(ctx)
@@ -107,14 +106,11 @@ func TestEngine_Health_Unhealthy(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
 	// Configure broker to report unhealthy
 	broker.SetHealthError(errors.New("broker is down"))
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"test-queue"}),
-	)
+	engine := NewEngine(broker, stats, registry)
 
 	ctx := context.Background()
 	err := engine.Start(ctx)
@@ -128,37 +124,31 @@ func TestEngine_Health_Unhealthy(t *testing.T) {
 	assert.Contains(t, health.BrokerHealth.Error(), "broker is down")
 }
 
-func TestEngine_Enqueue(t *testing.T) {
+func TestEngine_Register(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer)
+	engine := NewEngine(broker, stats, registry)
 
-	ctx := context.Background()
-	err := engine.Start(ctx)
-	require.NoError(t, err)
-	defer func() { _ = engine.Stop() }()
-
-	testJob := NewMockJob("TestJob", "test-queue", []interface{}{"arg1"})
-	err = engine.Enqueue(testJob)
+	// Test registering a worker
+	err := engine.Register("TestJob", func(queue string, args ...interface{}) error {
+		return nil
+	})
 	assert.NoError(t, err)
 
-	// Verify job was enqueued in broker
-	enqueuedJobs := broker.GetEnqueuedJobs()
-	assert.Len(t, enqueuedJobs, 1)
-	assert.Equal(t, testJob.GetID(), enqueuedJobs[0].GetID())
+	// Verify worker was registered
+	worker, exists := registry.Get("TestJob")
+	assert.True(t, exists)
+	assert.NotNil(t, worker)
 }
 
 func TestEngine_Run_ContextCancellation(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"test-queue"}),
+	engine := NewEngine(broker, stats, registry,
 		WithConcurrency(1),
 	)
 
@@ -189,12 +179,9 @@ func TestEngine_Integration_JobProcessing(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"test-queue"}),
+	engine := NewEngine(broker, stats, registry,
 		WithConcurrency(2),
-		WithPollInterval(50*time.Millisecond),
 	)
 
 	// Register a test worker
@@ -243,12 +230,9 @@ func TestEngine_Integration_FailedJobProcessing(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"test-queue"}),
+	engine := NewEngine(broker, stats, registry,
 		WithConcurrency(1),
-		WithPollInterval(50*time.Millisecond),
 	)
 
 	// Register a failing worker
@@ -283,12 +267,9 @@ func TestEngine_Integration_MultipleQueues(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"high", "medium", "low"}),
+	engine := NewEngine(broker, stats, registry,
 		WithConcurrency(2),
-		WithPollInterval(50*time.Millisecond),
 	)
 
 	// Register workers
@@ -341,10 +322,8 @@ func TestEngine_Start_WithShutdownTimeout(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"test-queue"}),
+	engine := NewEngine(broker, stats, registry,
 		WithConcurrency(1),
 		WithShutdownTimeout(50*time.Millisecond), // Very short timeout
 	)
@@ -383,11 +362,8 @@ func TestEngine_Health_QueueLengths(t *testing.T) {
 	broker := NewMockBroker()
 	stats := NewMockStatistics()
 	registry := NewMockRegistry()
-	serializer := NewMockSerializer()
 
-	engine := NewEngine(broker, stats, registry, serializer,
-		WithQueues([]string{"queue1", "queue2"}),
-	)
+	engine := NewEngine(broker, stats, registry)
 
 	// Add jobs to queues
 	job1 := NewMockJob("TestJob", "queue1", []interface{}{})

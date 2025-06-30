@@ -14,8 +14,10 @@ Redis-based engine with Ruby Resque compatibility.
 **Options:**
 ```go
 type ResqueOptions struct {
-    RedisURI      string         // Default: redis://localhost:6379/
-    RedisOptions  redis.Options  // Detailed Redis configuration
+    RedisURI      string               // Default: redis://localhost:6379/
+    RedisOptions  redis.Options        // Detailed Redis configuration
+    Queues        []string             // Queues to consume from
+    PollInterval  time.Duration        // Polling interval for jobs
     EngineOptions []core.EngineOption
 }
 ```
@@ -34,7 +36,8 @@ RabbitMQ-based engine with Rails ActiveJob compatibility.
 type SneakersOptions struct {
     RabbitMQURI     string                // Default: amqp://guest:guest@localhost:5672/
     RabbitMQOptions rabbitmq.Options      // Detailed RabbitMQ configuration
-    Statistics      interfaces.Statistics // Optional custom statistics
+    Queues          []string              // Queues to consume from
+    Statistics      core.Statistics       // Optional custom statistics
     EngineOptions   []core.EngineOption
 }
 ```
@@ -61,9 +64,18 @@ All pre-configured engines provide:
 
 ## Customization
 
-Override statistics for SneakersEngine:
+Configure queues for ResqueEngine:
+```go
+options := engines.DefaultResqueOptions()
+options.Queues = []string{"high", "medium", "low"}
+options.PollInterval = 3 * time.Second
+engine := engines.NewResqueEngine(options)
+```
+
+Configure queues and statistics for SneakersEngine:
 ```go
 options := engines.DefaultSneakersOptions()
+options.Queues = []string{"activejob", "images"}
 options.Statistics = resque.NewStatistics(resque.DefaultOptions())
 engine := engines.NewSneakersEngine(options)
 ```

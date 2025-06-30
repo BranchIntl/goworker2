@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/engines"
@@ -19,10 +18,9 @@ func main() {
 	// Create a pre-configured Sneakers engine (RabbitMQ + Sneakers serializer + NoOp stats)
 	options := engines.DefaultSneakersOptions()
 	options.RabbitMQURI = "amqp://guest:guest@localhost:5672/"
+	options.Queues = []string{"myqueue"}
 	options.EngineOptions = []core.EngineOption{
 		core.WithConcurrency(2),
-		core.WithQueues([]string{"myqueue"}),
-		core.WithPollInterval(5 * time.Second),
 	}
 
 	engine := engines.NewSneakersEngine(options)

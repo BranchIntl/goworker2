@@ -15,6 +15,7 @@ import (
 type SneakersOptions struct {
 	RabbitMQURI     string
 	RabbitMQOptions rabbitmq.Options
+	Queues          []string
 	Statistics      core.Statistics
 	EngineOptions   []core.EngineOption
 }
@@ -24,6 +25,7 @@ func DefaultSneakersOptions() SneakersOptions {
 	return SneakersOptions{
 		RabbitMQURI:     "amqp://guest:guest@localhost:5672/",
 		RabbitMQOptions: rabbitmq.DefaultOptions(),
+		Queues:          []string{},
 		Statistics:      noop.NewStatistics(),
 		EngineOptions:   []core.EngineOption{},
 	}
@@ -45,6 +47,9 @@ func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
 		options.RabbitMQOptions.URI = options.RabbitMQURI
 	}
 
+	// Configure queues
+	options.RabbitMQOptions.Queues = options.Queues
+
 	// Create components
 	serializer := sneakers.NewSerializer()
 	broker := rabbitmq.NewBroker(options.RabbitMQOptions, serializer)
@@ -61,7 +66,6 @@ func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
 		broker,
 		stats,
 		registry,
-		serializer,
 		options.EngineOptions...,
 	)
 

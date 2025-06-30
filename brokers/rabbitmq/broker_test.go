@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,6 @@ type mockSerializer struct {
 	serializeErr   error
 	deserializeErr error
 	format         string
-	useNumber      bool
 }
 
 func (m *mockSerializer) Serialize(j job.Job) ([]byte, error) {
@@ -40,9 +38,7 @@ func (m *mockSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Jo
 	}, nil
 }
 
-func (m *mockSerializer) GetFormat() string           { return m.format }
-func (m *mockSerializer) UseNumber() bool             { return m.useNumber }
-func (m *mockSerializer) SetUseNumber(useNumber bool) { m.useNumber = useNumber }
+func (m *mockSerializer) GetFormat() string { return m.format }
 
 // mockJob is a simple job implementation for testing
 type mockJob struct {
@@ -77,25 +73,6 @@ func TestNewBroker(t *testing.T) {
 	assert.Equal(t, options, broker.options)
 	assert.Equal(t, serializer, broker.serializer)
 	assert.NotNil(t, broker.declaredQueues)
-}
-
-func TestRabbitMQBroker_Type(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	assert.Equal(t, "rabbitmq", broker.Type())
-}
-
-func TestRabbitMQBroker_Capabilities(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	capabilities := broker.Capabilities()
-
-	expected := core.BrokerCapabilities{
-		SupportsAck:        true,
-		SupportsDelay:      true,
-		SupportsPriority:   true,
-		SupportsDeadLetter: true,
-	}
-
-	assert.Equal(t, expected, capabilities)
 }
 
 func TestRabbitMQBroker_Connect_InvalidURI(t *testing.T) {
@@ -181,7 +158,7 @@ func TestRabbitMQBroker_CreateQueue_NotConnected(t *testing.T) {
 	broker := NewBroker(DefaultOptions(), &mockSerializer{})
 	ctx := context.Background()
 
-	queueOptions := core.QueueOptions{
+	queueOptions := QueueOptions{
 		MaxRetries:      3,
 		MessageTTL:      5 * time.Minute,
 		DeadLetterQueue: "dlq",
@@ -232,13 +209,27 @@ func TestRabbitMQBroker_Enqueue_NotConnected(t *testing.T) {
 	assert.ErrorIs(t, err, errors.ErrNotConnected)
 }
 
-func TestRabbitMQBroker_Dequeue_NotConnected(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
+func TestRabbitMQBroker_Start_NotConnected(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{"test_queue"}
+	broker := NewBroker(options, &mockSerializer{})
 	ctx := context.Background()
+	jobChan := make(chan job.Job, 10)
 
-	job, err := broker.Dequeue(ctx, "test_queue")
+	err := broker.Start(ctx, jobChan)
 	assert.ErrorIs(t, err, errors.ErrNotConnected)
-	assert.Nil(t, job)
+}
+
+func TestRabbitMQBroker_Start_EmptyQueues(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{}
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
+
+	err := broker.Start(ctx, jobChan)
+	assert.ErrorIs(t, err, errors.ErrNoQueues)
 }
 
 func TestRabbitMQBroker_SerializationError(t *testing.T) {

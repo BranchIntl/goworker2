@@ -18,6 +18,7 @@ var (
 	ErrInvalidConfig  = errors.New("invalid configuration")
 	ErrEmptyClassName = errors.New("class name cannot be empty")
 	ErrNilWorkerFunc  = errors.New("worker function cannot be nil")
+	ErrNoQueues       = errors.New("no queues specified")
 )
 
 // BrokerError represents broker-specific errors
@@ -136,4 +137,26 @@ func IsTimeout(err error) bool {
 		return t.Timeout()
 	}
 	return errors.Is(err, ErrTimeout)
+}
+
+// Standard functions
+
+func As(err error, target any) bool {
+	return errors.As(err, target)
+}
+
+func Is(err, target error) bool {
+	return errors.Is(err, target)
+}
+
+func Join(errs ...error) error {
+	return errors.Join(errs...)
+}
+
+func New(text string) error {
+	return errors.New(text)
+}
+
+func Unwrap(err error) error {
+	return errors.Unwrap(err)
 }
