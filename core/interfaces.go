@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/BranchIntl/goworker2/job"
-	"github.com/cihub/seelog"
 )
 
 // WorkerFunc is the function signature for workers
@@ -35,9 +34,6 @@ type Broker interface {
 	// Broker-specific info
 	Type() string
 	Capabilities() BrokerCapabilities
-
-	// Logger injection
-	SetLogger(logger seelog.LoggerInterface)
 }
 
 // Statistics interface defines what core needs from a statistics backend

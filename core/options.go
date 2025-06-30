@@ -1,11 +1,7 @@
 package core
 
 import (
-	"io"
-	"os"
 	"time"
-
-	"github.com/cihub/seelog"
 )
 
 // Config holds engine configuration
@@ -15,10 +11,6 @@ type Config struct {
 	PollInterval    time.Duration
 	ShutdownTimeout time.Duration
 	JobBufferSize   int
-	LogLevel        seelog.LogLevel
-	LogOutput       io.Writer
-	ExitOnComplete  bool
-	UseStrictQueues bool
 }
 
 // EngineOption is a function that modifies engine configuration
@@ -32,10 +24,6 @@ func defaultConfig() *Config {
 		PollInterval:    5 * time.Second,
 		ShutdownTimeout: 30 * time.Second,
 		JobBufferSize:   100,
-		LogLevel:        seelog.InfoLvl,
-		LogOutput:       os.Stdout,
-		ExitOnComplete:  false,
-		UseStrictQueues: true,
 	}
 }
 
@@ -71,33 +59,5 @@ func WithShutdownTimeout(d time.Duration) EngineOption {
 func WithJobBufferSize(size int) EngineOption {
 	return func(c *Config) {
 		c.JobBufferSize = size
-	}
-}
-
-// WithLogLevel sets the logging level
-func WithLogLevel(level seelog.LogLevel) EngineOption {
-	return func(c *Config) {
-		c.LogLevel = level
-	}
-}
-
-// WithLogOutput sets the log output writer
-func WithLogOutput(w io.Writer) EngineOption {
-	return func(c *Config) {
-		c.LogOutput = w
-	}
-}
-
-// WithExitOnComplete enables exit when queues are empty
-func WithExitOnComplete(exit bool) EngineOption {
-	return func(c *Config) {
-		c.ExitOnComplete = exit
-	}
-}
-
-// WithStrictQueues enables strict queue ordering
-func WithStrictQueues(strict bool) EngineOption {
-	return func(c *Config) {
-		c.UseStrictQueues = strict
 	}
 }

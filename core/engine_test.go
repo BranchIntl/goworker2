@@ -289,7 +289,6 @@ func TestEngine_Integration_MultipleQueues(t *testing.T) {
 		WithQueues([]string{"high", "medium", "low"}),
 		WithConcurrency(2),
 		WithPollInterval(50*time.Millisecond),
-		WithStrictQueues(true), // Process in queue order
 	)
 
 	// Register workers

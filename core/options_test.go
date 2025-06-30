@@ -17,8 +17,6 @@ func TestMultipleOptions(t *testing.T) {
 		WithPollInterval(3 * time.Second),
 		WithShutdownTimeout(60 * time.Second),
 		WithJobBufferSize(500),
-		WithExitOnComplete(true),
-		WithStrictQueues(false),
 	}
 
 	for _, option := range options {
@@ -31,6 +29,4 @@ func TestMultipleOptions(t *testing.T) {
 	assert.Equal(t, 3*time.Second, config.PollInterval)
 	assert.Equal(t, 60*time.Second, config.ShutdownTimeout)
 	assert.Equal(t, 500, config.JobBufferSize)
-	assert.True(t, config.ExitOnComplete)
-	assert.False(t, config.UseStrictQueues)
 }
