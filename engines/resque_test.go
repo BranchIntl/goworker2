@@ -13,10 +13,9 @@ import (
 
 func TestResqueEngine_ConfigurationOverride(t *testing.T) {
 	tests := []struct {
-		name       string
-		redisURI   string
-		redisOpts  redis.Options
-		expectType string
+		name      string
+		redisURI  string
+		redisOpts redis.Options
 	}{
 		{
 			name:     "URI overrides options",
@@ -25,7 +24,6 @@ func TestResqueEngine_ConfigurationOverride(t *testing.T) {
 				URI:       "redis://original:6379/",
 				Namespace: "test:",
 			},
-			expectType: "redis",
 		},
 		{
 			name:     "empty URI uses options",
@@ -34,7 +32,6 @@ func TestResqueEngine_ConfigurationOverride(t *testing.T) {
 				URI:       "redis://from-options:6379/",
 				Namespace: "test:",
 			},
-			expectType: "redis",
 		},
 	}
 
@@ -46,8 +43,7 @@ func TestResqueEngine_ConfigurationOverride(t *testing.T) {
 				EngineOptions: []core.EngineOption{},
 			}
 
-			engine := NewResqueEngine(options)
-			assert.Equal(t, tt.expectType, engine.broker.Type())
+			NewResqueEngine(options)
 		})
 	}
 }
@@ -94,4 +90,26 @@ func TestResqueEngine_MustPanicOnError(t *testing.T) {
 	assert.Panics(t, func() {
 		engine.MustStart(ctx)
 	})
+}
+
+func TestResqueEngine_QueueConfiguration(t *testing.T) {
+	options := DefaultResqueOptions()
+	options.Queues = []string{"high", "medium", "low"}
+	options.PollInterval = 3 * time.Second
+
+	engine := NewResqueEngine(options)
+
+	// Verify that queues are configured on the broker
+	brokerQueues := engine.broker.Queues()
+	assert.Equal(t, []string{"high", "medium", "low"}, brokerQueues)
+}
+
+func TestResqueEngine_DefaultQueueConfiguration(t *testing.T) {
+	options := DefaultResqueOptions()
+
+	engine := NewResqueEngine(options)
+
+	// Verify that default empty queues are used
+	brokerQueues := engine.broker.Queues()
+	assert.Equal(t, []string{}, brokerQueues)
 }

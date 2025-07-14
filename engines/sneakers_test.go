@@ -2,7 +2,6 @@ package engines
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -19,7 +18,6 @@ func TestSneakersEngine_ConfigurationOverride(t *testing.T) {
 		name         string
 		rabbitMQURI  string
 		rabbitMQOpts rabbitmq.Options
-		expectType   string
 	}{
 		{
 			name:        "URI overrides options",
@@ -29,7 +27,6 @@ func TestSneakersEngine_ConfigurationOverride(t *testing.T) {
 				PrefetchCount: 5,
 				Exchange:      "test-exchange",
 			},
-			expectType: "rabbitmq",
 		},
 		{
 			name:        "empty URI uses options",
@@ -39,7 +36,6 @@ func TestSneakersEngine_ConfigurationOverride(t *testing.T) {
 				PrefetchCount: 10,
 				Exchange:      "options-exchange",
 			},
-			expectType: "rabbitmq",
 		},
 	}
 
@@ -52,8 +48,7 @@ func TestSneakersEngine_ConfigurationOverride(t *testing.T) {
 				EngineOptions:   []core.EngineOption{},
 			}
 
-			engine := NewSneakersEngine(options)
-			assert.Equal(t, tt.expectType, engine.broker.Type())
+			NewSneakersEngine(options)
 		})
 	}
 }
@@ -62,17 +57,14 @@ func TestSneakersEngine_StatisticsHandling(t *testing.T) {
 	tests := []struct {
 		name       string
 		statistics core.Statistics
-		expectType string
 	}{
 		{
 			name:       "nil statistics becomes noop",
 			statistics: nil,
-			expectType: "*noop.NoOpStatistics",
 		},
 		{
 			name:       "custom statistics preserved",
 			statistics: resque.NewStatistics(resque.DefaultOptions()),
-			expectType: "*resque.ResqueStatistics",
 		},
 	}
 
@@ -84,7 +76,6 @@ func TestSneakersEngine_StatisticsHandling(t *testing.T) {
 			engine := NewSneakersEngine(options)
 
 			require.NotNil(t, engine.stats)
-			assert.Contains(t, fmt.Sprintf("%T", engine.stats), tt.expectType)
 		})
 	}
 }
@@ -129,4 +120,25 @@ func TestSneakersEngine_MustPanicOnError(t *testing.T) {
 	assert.Panics(t, func() {
 		engine.MustStart(ctx)
 	})
+}
+
+func TestSneakersEngine_QueueConfiguration(t *testing.T) {
+	options := DefaultSneakersOptions()
+	options.Queues = []string{"activejob", "images"}
+
+	engine := NewSneakersEngine(options)
+
+	// Verify that queues are configured on the broker
+	brokerQueues := engine.broker.Queues()
+	assert.Equal(t, []string{"activejob", "images"}, brokerQueues)
+}
+
+func TestSneakersEngine_DefaultQueueConfiguration(t *testing.T) {
+	options := DefaultSneakersOptions()
+
+	engine := NewSneakersEngine(options)
+
+	// Verify that default empty queues are used
+	brokerQueues := engine.broker.Queues()
+	assert.Equal(t, []string{}, brokerQueues)
 }

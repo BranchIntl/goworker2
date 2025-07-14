@@ -8,7 +8,7 @@
 // # Architecture
 //
 // goworker uses dependency injection with these core components:
-//   - Broker: Handles queue operations (Redis, RabbitMQ)
+//   - Broker: Handles queue operations and job consumption (Redis, RabbitMQ)
 //   - Statistics: Records metrics and monitoring data
 //   - Registry: Maps job classes to worker functions
 //   - Serializer: Converts jobs to/from bytes
@@ -26,7 +26,11 @@
 //	}
 //
 //	func main() {
-//		engine := engines.NewResqueEngine(engines.DefaultResqueOptions())
+//		options := engines.DefaultResqueOptions()
+//		options.Queues = []string{"email", "default"}
+//		options.PollInterval = 3 * time.Second
+//
+//		engine := engines.NewResqueEngine(options)
 //		engine.Register("EmailJob", emailJob)
 //		engine.Run(context.Background())
 //	}
@@ -41,7 +45,10 @@
 //	}
 //
 //	func main() {
-//		engine := engines.NewSneakersEngine(engines.DefaultSneakersOptions())
+//		options := engines.DefaultSneakersOptions()
+//		options.Queues = []string{"images", "default"}
+//
+//		engine := engines.NewSneakersEngine(options)
 //		engine.Register("ImageProcessor", imageProcessor)
 //		engine.Run(context.Background())
 //	}
@@ -60,20 +67,24 @@
 //	)
 //
 //	func main() {
+//		// Configure broker with queues
+//		brokerOpts := redis.DefaultOptions()
+//		brokerOpts.Queues = []string{"critical", "default"}
+//		brokerOpts.PollInterval = 5 * time.Second
+//
 //		// Create components
-//		broker := redis.NewBroker(redis.DefaultOptions(), resque.NewSerializer())
+//		serializer := resque.NewSerializer()
+//		broker := redis.NewBroker(brokerOpts, serializer)
 //		stats := resque.NewStatistics(resque.DefaultOptions())
 //		reg := registry.NewRegistry()
-//		serializer := resque.NewSerializer()
 //
 //		// Create engine
 //		engine := core.NewEngine(
 //			broker,    // implements core.Broker
 //			stats,     // implements core.Statistics
 //			reg,       // implements core.Registry
-//			serializer, // implements core.Serializer
 //			core.WithConcurrency(10),
-//			core.WithQueues([]string{"critical", "default"}),
+//			core.WithShutdownTimeout(30*time.Second),
 //		)
 //
 //		// Register workers
@@ -119,10 +130,12 @@
 // ResqueEngine: Redis + Resque serializer + Resque statistics
 // - Compatible with Ruby Resque
 // - Uses Redis for queuing and statistics
+// - Configure queues and poll interval via ResqueOptions
 //
 // SneakersEngine: RabbitMQ + Sneakers serializer + NoOp statistics
 // - Compatible with Rails ActiveJob/Sneakers
 // - Uses RabbitMQ for queuing
+// - Configure queues via SneakersOptions
 //
 // # Health Monitoring
 //

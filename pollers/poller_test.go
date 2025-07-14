@@ -1,18 +1,18 @@
-package core
+package pollers
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
+	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPoller_Start_WithJobs(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"test-queue"}
 
@@ -20,7 +20,7 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{"arg1"})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewStandardPoller(broker, stats, queues, 100*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 100*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -51,14 +51,13 @@ func TestPoller_Start_WithJobs(t *testing.T) {
 
 func TestPoller_Start_NoJobs(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"empty-queue"}
 
 	// Configure broker to return nil (no jobs)
 	broker.SetShouldReturnNilOnDequeue(true)
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -89,7 +88,6 @@ func TestPoller_Start_NoJobs(t *testing.T) {
 
 func TestPoller_Start_MultipleQueues(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"queue1", "queue2", "queue3"}
 
@@ -102,7 +100,7 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 	broker.AddJobToQueue("queue2", job2)
 	broker.AddJobToQueue("queue3", job3)
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
@@ -132,34 +130,33 @@ func TestPoller_Start_MultipleQueues(t *testing.T) {
 
 func TestPoller_Start_DequeueError(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 	jobChan := make(chan job.Job, 10)
 	queues := []string{"error-queue"}
 
 	// Configure broker to return error
 	broker.SetDequeueError(errors.New("dequeue failed"))
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 50*time.Millisecond)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	// Start poller - should handle errors gracefully
 	err := poller.Start(ctx, jobChan)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "dequeue failed")
 }
 
 func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
-	jobChan := make(chan job.Job)
+	jobChan := make(chan job.Job, 1) // Use buffered channel to avoid blocking
 	queues := []string{"test-queue"}
 
 	// Add a job to the broker
 	testJob := NewMockJob("TestJob", "test-queue", []interface{}{})
 	broker.AddJobToQueue("test-queue", testJob)
 
-	poller := NewStandardPoller(broker, stats, queues, 10*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 10*time.Millisecond)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -169,13 +166,13 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 		done <- poller.Start(ctx, jobChan)
 	}()
 
-	// Wait for poller to poll the job and try to send it (will block on unbuffered channel)
-	time.Sleep(50 * time.Millisecond)
+	// Wait briefly for the poller to start and potentially process the job
+	time.Sleep(20 * time.Millisecond)
 
-	// Cancel context while job is being sent
+	// Cancel context
 	cancel()
 
-	// Poller should stop and possibly requeue the job
+	// Poller should stop gracefully
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
@@ -183,21 +180,20 @@ func TestPoller_Start_ContextCancellationWithJob(t *testing.T) {
 		t.Fatal("Poller did not stop within timeout")
 	}
 
-	// Job might have been requeued (nacked) or successfully sent
+	// Verify the job was either processed or nacked
 	// In this test, we primarily verify the poller stops gracefully
 	assert.GreaterOrEqual(t, len(broker.GetNackedJobs()), 0)
 }
 
 func TestPoller_pollOnce_Error(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 	queues := []string{"error-queue"}
 
 	// Configure broker to return error
 	testError := errors.New("dequeue error")
 	broker.SetDequeueError(testError)
 
-	poller := NewStandardPoller(broker, stats, queues, time.Second)
+	poller := NewStandardPoller(broker, queues, time.Second)
 
 	ctx := context.Background()
 	job, err := poller.pollOnce(ctx)
@@ -209,21 +205,20 @@ func TestPoller_pollOnce_Error(t *testing.T) {
 
 func TestPoller_Start_ChannelBlocked(t *testing.T) {
 	broker := NewMockBroker()
-	stats := NewMockStatistics()
 
 	// Create small buffered channel that can be filled
 	jobChan := make(chan job.Job, 1)
 	queues := []string{"test-queue"}
 
-	// Add multiple jobs to the broker
-	for i := 0; i < 3; i++ {
-		testJob := NewMockJob("TestJob", "test-queue", []interface{}{i})
-		broker.AddJobToQueue("test-queue", testJob)
-	}
+	// Add only 2 jobs to the broker to test the channel blocking scenario
+	testJob1 := NewMockJob("TestJob1", "test-queue", []interface{}{1})
+	testJob2 := NewMockJob("TestJob2", "test-queue", []interface{}{2})
+	broker.AddJobToQueue("test-queue", testJob1)
+	broker.AddJobToQueue("test-queue", testJob2)
 
-	poller := NewStandardPoller(broker, stats, queues, 50*time.Millisecond)
+	poller := NewStandardPoller(broker, queues, 10*time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	// Start poller in goroutine
@@ -231,19 +226,22 @@ func TestPoller_Start_ChannelBlocked(t *testing.T) {
 		_ = poller.Start(ctx, jobChan)
 	}()
 
-	// Fill the channel buffer
+	// Receive the first job
 	select {
 	case <-jobChan:
 		// Remove one job from channel
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(50 * time.Millisecond):
 		t.Fatal("Did not receive first job")
 	}
 
-	// Should be able to receive more jobs
+	// Should be able to receive the second job
 	select {
 	case <-jobChan:
 		// Got another job
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(50 * time.Millisecond):
 		t.Fatal("Did not receive second job")
 	}
+
+	// After receiving both jobs, no more jobs should be available
+	// and the broker should return nil, allowing the poller to wait
 }

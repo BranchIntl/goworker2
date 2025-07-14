@@ -23,6 +23,7 @@ package engines
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/BranchIntl/goworker2/brokers/redis"
 	"github.com/BranchIntl/goworker2/core"
@@ -35,6 +36,8 @@ import (
 type ResqueOptions struct {
 	RedisURI      string
 	RedisOptions  redis.Options
+	Queues        []string
+	PollInterval  time.Duration
 	EngineOptions []core.EngineOption
 }
 
@@ -43,6 +46,8 @@ func DefaultResqueOptions() ResqueOptions {
 	return ResqueOptions{
 		RedisURI:      "redis://localhost:6379/",
 		RedisOptions:  redis.DefaultOptions(),
+		Queues:        []string{},
+		PollInterval:  5 * time.Second,
 		EngineOptions: []core.EngineOption{},
 	}
 }
@@ -63,6 +68,10 @@ func NewResqueEngine(options ResqueOptions) *ResqueEngine {
 		options.RedisOptions.URI = options.RedisURI
 	}
 
+	// Configure queues and poll interval
+	options.RedisOptions.Queues = options.Queues
+	options.RedisOptions.PollInterval = options.PollInterval
+
 	// Create components
 	serializer := resque.NewSerializer()
 	broker := redis.NewBroker(options.RedisOptions, serializer)
@@ -79,7 +88,6 @@ func NewResqueEngine(options ResqueOptions) *ResqueEngine {
 		broker,
 		stats,
 		registry,
-		serializer,
 		options.EngineOptions...,
 	)
 

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/errors"
 	"github.com/BranchIntl/goworker2/job"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +16,6 @@ type mockSerializer struct {
 	serializeErr   error
 	deserializeErr error
 	format         string
-	useNumber      bool
 }
 
 func (m *mockSerializer) Serialize(j job.Job) ([]byte, error) {
@@ -40,9 +38,7 @@ func (m *mockSerializer) Deserialize(data []byte, metadata job.Metadata) (job.Jo
 	}, nil
 }
 
-func (m *mockSerializer) GetFormat() string           { return m.format }
-func (m *mockSerializer) UseNumber() bool             { return m.useNumber }
-func (m *mockSerializer) SetUseNumber(useNumber bool) { m.useNumber = useNumber }
+func (m *mockSerializer) GetFormat() string { return m.format }
 
 // mockJob is a simple job implementation for testing
 type mockJob struct {
@@ -77,25 +73,6 @@ func TestNewBroker(t *testing.T) {
 	assert.Equal(t, options.Namespace, broker.namespace)
 	assert.Equal(t, options, broker.options)
 	assert.Equal(t, serializer, broker.serializer)
-}
-
-func TestRedisBroker_Type(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	assert.Equal(t, "redis", broker.Type())
-}
-
-func TestRedisBroker_Capabilities(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	capabilities := broker.Capabilities()
-
-	expected := core.BrokerCapabilities{
-		SupportsAck:        false,
-		SupportsDelay:      false,
-		SupportsPriority:   false,
-		SupportsDeadLetter: false,
-	}
-
-	assert.Equal(t, expected, capabilities)
 }
 
 func TestRedisBroker_Connect_InvalidURI(t *testing.T) {
@@ -228,13 +205,33 @@ func TestRedisBroker_Nack(t *testing.T) {
 	})
 }
 
-func TestRedisBroker_CreateQueue(t *testing.T) {
-	broker := NewBroker(DefaultOptions(), &mockSerializer{})
-	ctx := context.Background()
+func TestRedisBroker_Start_NotConnected(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{"test_queue"}
+	options.PollInterval = 100 * time.Millisecond
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
 
-	// CreateQueue is a no-op for Redis
-	err := broker.CreateQueue(ctx, "test_queue", core.QueueOptions{})
-	assert.NoError(t, err)
+	err := broker.Start(ctx, jobChan)
+	assert.ErrorIs(t, err, errors.ErrNotConnected)
+}
+
+func TestRedisBroker_Start_EmptyQueues(t *testing.T) {
+	options := DefaultOptions()
+	options.Queues = []string{} // No queues
+	options.PollInterval = 100 * time.Millisecond
+	broker := NewBroker(options, &mockSerializer{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	jobChan := make(chan job.Job, 10)
+
+	// Start should handle empty queues gracefully
+	err := broker.Start(ctx, jobChan)
+	// Since StandardPoller is used, it should handle empty queues by not polling
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, errors.ErrNoQueues)
 }
 
 func TestRedisBroker_SerializationError(t *testing.T) {
