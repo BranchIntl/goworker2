@@ -113,7 +113,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 		err := errors.NewWorkerError(job.GetClass(), job.GetQueue(), errors.ErrWorkerNotFound)
 		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job for unknown worker
-		if err := w.broker.Nack(ctx, job, true); err != nil {
+		if err := w.broker.Nack(ctx, job, false); err != nil {
 			slog.Error("Failed to nack job", "error", err)
 		}
 		return
@@ -125,7 +125,7 @@ func (w *Worker) processJob(ctx context.Context, job job.Job) {
 	if err != nil {
 		w.handleJobError(ctx, job, workerInfo, err, startTime)
 		// Nack the job on error
-		if err := w.broker.Nack(ctx, job, true); err != nil {
+		if err := w.broker.Nack(ctx, job, false); err != nil {
 			slog.Error("Failed to nack job", "error", err)
 		}
 	} else {
