@@ -374,6 +374,9 @@ func TestEngine_Health_QueueLengths(t *testing.T) {
 	broker.AddJobToQueue("queue1", job2)
 	broker.AddJobToQueue("queue2", job3)
 
+	// Configure broker to not dequeue jobs, so they remain in the queue for health check
+	broker.SetShouldReturnNilOnDequeue(true)
+
 	ctx := context.Background()
 	err := engine.Start(ctx)
 	require.NoError(t, err)
