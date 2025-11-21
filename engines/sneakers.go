@@ -18,6 +18,7 @@ type SneakersOptions struct {
 	Queues          []string
 	Statistics      core.Statistics
 	EngineOptions   []core.EngineOption
+	Concurrency     int
 }
 
 // DefaultSneakersOptions returns default options for Sneakers engine
@@ -28,6 +29,7 @@ func DefaultSneakersOptions() SneakersOptions {
 		Queues:          []string{},
 		Statistics:      noop.NewStatistics(),
 		EngineOptions:   []core.EngineOption{},
+		Concurrency:     core.DefaultConcurrency,
 	}
 }
 
@@ -49,6 +51,16 @@ func NewSneakersEngine(options SneakersOptions) *SneakersEngine {
 
 	// Configure queues
 	options.RabbitMQOptions.Queues = options.Queues
+
+	// Ensure prefetch matches concurrency
+	// We enforce that we prefetch at least as many messages as we have workers
+	// to prevent worker starvation.
+	if options.Concurrency > options.RabbitMQOptions.PrefetchCount {
+		options.RabbitMQOptions.PrefetchCount = options.Concurrency
+	}
+
+	// Apply the concurrency setting to the core engine
+	options.EngineOptions = append(options.EngineOptions, core.WithConcurrency(options.Concurrency))
 
 	// Create components
 	serializer := sneakers.NewSerializer()

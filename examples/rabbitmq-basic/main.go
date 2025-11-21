@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/BranchIntl/goworker2/core"
 	"github.com/BranchIntl/goworker2/engines"
 )
 
@@ -19,9 +18,7 @@ func main() {
 	options := engines.DefaultSneakersOptions()
 	options.RabbitMQURI = "amqp://guest:guest@localhost:5672/"
 	options.Queues = []string{"myqueue"}
-	options.EngineOptions = []core.EngineOption{
-		core.WithConcurrency(2),
-	}
+	options.Concurrency = 2
 
 	engine := engines.NewSneakersEngine(options)
 
