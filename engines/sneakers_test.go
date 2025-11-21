@@ -41,12 +41,10 @@ func TestSneakersEngine_ConfigurationOverride(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			options := SneakersOptions{
-				RabbitMQURI:     tt.rabbitMQURI,
-				RabbitMQOptions: tt.rabbitMQOpts,
-				Statistics:      noop.NewStatistics(),
-				EngineOptions:   []core.EngineOption{},
-			}
+			options := DefaultSneakersOptions()
+			options.RabbitMQURI = tt.rabbitMQURI
+			options.RabbitMQOptions = tt.rabbitMQOpts
+			options.Statistics = noop.NewStatistics()
 
 			NewSneakersEngine(options)
 		})

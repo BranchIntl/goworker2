@@ -4,6 +4,15 @@ import (
 	"time"
 )
 
+const (
+	// DefaultConcurrency is the default number of workers
+	DefaultConcurrency = 25
+	// DefaultShutdownTimeout is the default time to wait for jobs to finish
+	DefaultShutdownTimeout = 30 * time.Second
+	// DefaultJobBufferSize is the default size of the job channel
+	DefaultJobBufferSize = 100
+)
+
 // Config holds engine configuration
 type Config struct {
 	Concurrency     int
@@ -17,9 +26,9 @@ type EngineOption func(*Config)
 // defaultConfig returns default configuration
 func defaultConfig() *Config {
 	return &Config{
-		Concurrency:     25,
-		ShutdownTimeout: 30 * time.Second,
-		JobBufferSize:   100,
+		Concurrency:     DefaultConcurrency,
+		ShutdownTimeout: DefaultShutdownTimeout,
+		JobBufferSize:   DefaultJobBufferSize,
 	}
 }
 
