@@ -122,7 +122,7 @@ func (r *RabbitMQBroker) handleReconnection(ctx context.Context) {
 			if err == nil {
 				return // Graceful shutdown
 			}
-			slog.Error("Connection closed, reconnecting...", "error", err)
+			slog.Warn("Connection closed, reconnecting...", "error", err)
 
 			r.mu.Lock()
 			r.isConnected = false
@@ -156,7 +156,7 @@ func (r *RabbitMQBroker) handleReconnection(ctx context.Context) {
 						break // Exit the retry loop
 					}
 				}
-				slog.Error("Reconnect failed", "error", err)
+				slog.Warn("Reconnect failed", "error", err)
 			}
 		case <-ctx.Done():
 			return
