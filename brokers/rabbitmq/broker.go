@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/BranchIntl/goworker2/errors"
@@ -41,6 +42,10 @@ type RabbitMQBroker struct {
 	serializer     Serializer
 	declaredQueues map[string]bool   // Track declared queues
 	consumerTags   map[string]string // Track consumer tags
+	mu             sync.RWMutex
+	notifyClose    chan *amqp.Error
+	isConnected    bool
+	jobChan        chan<- job.Job
 }
 
 // NewBroker creates a new RabbitMQ broker
@@ -55,6 +60,15 @@ func NewBroker(options Options, serializer Serializer) *RabbitMQBroker {
 
 // Connect establishes connection to RabbitMQ
 func (r *RabbitMQBroker) Connect(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.connect(ctx)
+}
+
+// connect establishes the connection and channel, and sets up monitoring
+// This method expects the caller to hold the lock
+func (r *RabbitMQBroker) connect(ctx context.Context) error {
 	conn, err := amqp.Dial(r.options.URI)
 	if err != nil {
 		return errors.NewConnectionError(r.options.URI,
@@ -82,7 +96,72 @@ func (r *RabbitMQBroker) Connect(ctx context.Context) error {
 	r.connection = conn
 	r.channel = ch
 
+	// Watch for closing
+	r.notifyClose = make(chan *amqp.Error)
+	r.connection.NotifyClose(r.notifyClose)
+	r.isConnected = true
+
+	// Launch background recovery routine
+	// We use a new background context because we want reconnection to persist
+	// even if the initial context used for Connect() expires,
+	// unless the application itself is shutting down.
+	// However, checking if we should use the passed context or a long-lived one.
+	// The Start() method blocks, but Connect() returns.
+	// Typically, libraries handle this with a long-lived loop.
+	if r.options.ReconnectEnabled {
+		go r.handleReconnection(context.Background())
+	}
+
 	return nil
+}
+
+func (r *RabbitMQBroker) handleReconnection(ctx context.Context) {
+	for {
+		select {
+		case err := <-r.notifyClose:
+			if err == nil {
+				return // Graceful shutdown
+			}
+			slog.Warn("Connection closed, reconnecting...", "error", err)
+
+			r.mu.Lock()
+			r.isConnected = false
+			r.mu.Unlock()
+
+			// Retry loop
+			for {
+				time.Sleep(r.options.ReconnectDelay)
+
+				r.mu.Lock()
+				// Check if we are already connected (could happen if multiple routines try, though unlikely here)
+				if r.isConnected {
+					r.mu.Unlock()
+					break
+				}
+
+				err := r.connect(ctx)
+				r.mu.Unlock()
+
+				if err == nil {
+					slog.Info("Reconnected to RabbitMQ")
+
+					// Restart consumers
+					if err := r.startConsumers(ctx); err != nil {
+						slog.Error("Failed to restart consumers after reconnection", "error", err)
+						// If we fail to restart consumers, we should retry connecting/restarting
+						// For now, we continue the loop to try again
+						continue
+					} else {
+						slog.Info("Consumers restarted successfully")
+						break // Exit the retry loop
+					}
+				}
+				slog.Warn("Reconnect failed", "error", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // Close closes the RabbitMQ connection
@@ -101,7 +180,10 @@ func (r *RabbitMQBroker) Close() error {
 // Health checks the RabbitMQ connection health
 // COMMENT: Not doing a PING here unlike Redis, is this enough. Do we need to open/close a channel to confirm?
 func (r *RabbitMQBroker) Health() error {
-	if r.connection == nil || r.connection.IsClosed() {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if !r.isConnected || r.connection == nil || r.connection.IsClosed() {
 		return errors.ErrNotConnected
 	}
 	return nil
@@ -171,9 +253,11 @@ func (r *RabbitMQBroker) Nack(ctx context.Context, j job.Job, requeue bool) erro
 
 // CreateQueue creates a new queue
 func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options QueueOptions) error {
-	channel, err := r.getChannel()
-	if err != nil {
-		return err
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.channel == nil {
+		return errors.ErrNotConnected
 	}
 
 	args := amqp.Table{}
@@ -194,7 +278,7 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options Q
 		args["x-max-retries"] = options.MaxRetries
 	}
 
-	_, err = channel.QueueDeclare(
+	_, err := r.channel.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
@@ -213,12 +297,14 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options Q
 
 // DeleteQueue deletes a queue
 func (r *RabbitMQBroker) DeleteQueue(ctx context.Context, name string) error {
-	channel, err := r.getChannel()
-	if err != nil {
-		return err
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.channel == nil {
+		return errors.ErrNotConnected
 	}
 
-	_, err = channel.QueueDelete(name, false, false, false)
+	_, err := r.channel.QueueDelete(name, false, false, false)
 	if err != nil {
 		return errors.NewBrokerError("delete_queue", name, err)
 	}
@@ -263,6 +349,8 @@ func (r *RabbitMQBroker) QueueLength(ctx context.Context, name string) (int64, e
 
 // getChannel returns the channel if connected, otherwise returns ErrNotConnected
 func (r *RabbitMQBroker) getChannel() (*amqp.Channel, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	if r.channel == nil {
 		return nil, errors.ErrNotConnected
 	}
@@ -271,16 +359,18 @@ func (r *RabbitMQBroker) getChannel() (*amqp.Channel, error) {
 
 // ensureQueue makes sure a queue is declared
 func (r *RabbitMQBroker) ensureQueue(name string) error {
-	channel, err := r.getChannel()
-	if err != nil {
-		return err
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.channel == nil {
+		return errors.ErrNotConnected
 	}
 
 	if r.declaredQueues[name] {
 		return nil // Already declared
 	}
 
-	_, err = channel.QueueDeclare(
+	_, err := r.channel.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
@@ -299,9 +389,33 @@ func (r *RabbitMQBroker) ensureQueue(name string) error {
 
 // Start begins consuming jobs and sending them to the job channel
 func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) error {
+	r.mu.Lock()
+	r.jobChan = jobChan
+	r.mu.Unlock()
+
 	slog.Info("Starting RabbitMQ consumer", "queues", r.options.Queues)
 	if len(r.options.Queues) == 0 {
 		return errors.ErrNoQueues
+	}
+
+	if err := r.startConsumers(ctx); err != nil {
+		return err
+	}
+
+	// Keep running until context is cancelled
+	<-ctx.Done()
+	slog.Info("RabbitMQ consumer stopped")
+	close(jobChan)
+	return nil
+}
+
+func (r *RabbitMQBroker) startConsumers(ctx context.Context) error {
+	r.mu.RLock()
+	jobChan := r.jobChan
+	r.mu.RUnlock()
+
+	if jobChan == nil {
+		return nil
 	}
 
 	for _, queue := range r.options.Queues {
@@ -329,11 +443,6 @@ func (r *RabbitMQBroker) Start(ctx context.Context, jobChan chan<- job.Job) erro
 
 		go r.handleDeliveries(ctx, queue, deliveries, jobChan)
 	}
-
-	// Keep running until context is cancelled
-	<-ctx.Done()
-	slog.Info("RabbitMQ consumer stopped")
-	close(jobChan)
 	return nil
 }
 
