@@ -32,6 +32,8 @@ type QueueOptions struct {
 	VisibilityTimeout time.Duration
 	// DeadLetterQueue name for failed messages
 	DeadLetterQueue string
+	// QueueType for defining the type of queue (classic, quorum, stream)
+	QueueType string
 }
 
 // RabbitMQBroker implements the Broker interface for RabbitMQ
@@ -260,23 +262,8 @@ func (r *RabbitMQBroker) CreateQueue(ctx context.Context, name string, options Q
 		return errors.ErrNotConnected
 	}
 
-	args := amqp.Table{}
-
-	// Set message TTL if specified
-	if options.MessageTTL > 0 {
-		args["x-message-ttl"] = int64(options.MessageTTL / time.Millisecond)
-	}
-
-	// Set dead letter exchange if specified
-	if options.DeadLetterQueue != "" {
-		args["x-dead-letter-exchange"] = ""
-		args["x-dead-letter-routing-key"] = options.DeadLetterQueue
-	}
-
-	// Set max retries if specified
-	if options.MaxRetries > 0 {
-		args["x-max-retries"] = options.MaxRetries
-	}
+	// Build arguments
+	args := r.buildQueueArgs(options)
 
 	_, err := r.channel.QueueDeclare(
 		name,  // name
